@@ -1,0 +1,3 @@
+FROM docker.io/library/postgres:16-alpine
+
+COPY app/db/schema.sql /docker-entrypoint-initdb.d/01_schema.sql

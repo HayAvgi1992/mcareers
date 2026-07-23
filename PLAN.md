@@ -119,13 +119,13 @@ mcareers/
 **So that** API and worker share the same settings
 
 **Tasks**
-- [ ] Fill `requirements.txt` (fastapi, uvicorn, sqlalchemy, asyncpg, redis, pydantic-settings, pytest, httpx, …)
-- [ ] Create `app/config.py` with `DATABASE_URL`, `REDIS_URL`, `WORKER_LEASE_SECONDS`, etc.
-- [ ] Add `.env.example`
+- [x] Fill `requirements.txt` (fastapi, uvicorn, sqlalchemy, asyncpg, redis, pydantic-settings, pytest, httpx, …)
+- [x] Create `app/config.py` with `DATABASE_URL`, `REDIS_URL`, `WORKER_LEASE_SECONDS`, etc.
+- [x] Add `.env.example`
 
 **Acceptance criteria**
-- [ ] `from app.config import settings` loads from environment
-- [ ] Defaults work for local docker-compose hostnames
+- [x] `from app.config import settings` loads from environment
+- [x] Defaults work for local docker-compose hostnames
 
 ---
 
@@ -136,15 +136,15 @@ mcareers/
 **So that** I can run the project without manual setup
 
 **Tasks**
-- [ ] `docker-compose.yml`: postgres, redis, api, worker
-- [ ] `Dockerfile`: multi-stage or single image for api + worker (different commands)
-- [ ] Postgres init: run `schema.sql` on first boot
-- [ ] Healthchecks on postgres + redis
+- [x] `docker-compose.yml`: postgres, redis, api, worker
+- [x] `Dockerfile`: multi-stage or single image for api + worker (different commands)
+- [x] Postgres init: run `schema.sql` on first boot
+- [x] Healthchecks on postgres + redis
 
 **Acceptance criteria**
-- [ ] `docker-compose up` starts 4 services
-- [ ] API responds on documented port
-- [ ] Tables exist in Postgres after startup
+- [x] `docker-compose up` starts 4 services
+- [x] API responds on documented port
+- [x] Tables exist in Postgres after startup
 
 ---
 

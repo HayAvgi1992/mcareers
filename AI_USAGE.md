@@ -2,11 +2,13 @@
 
 ## Tools I Used
 
-[List the AI tools you used]
+- Cursor (Grok) for Story 0.1 scaffolding (requirements, config, `.env.example`)
+- Cursor (Grok) for Story 0.2 docker-compose / Dockerfile / boot stubs
 
 ## What Helped Most
 
-[Describe 1-2 specific cases where AI helped significantly]
+- Quickly drafting a pydantic-settings `Settings` class with docker-compose hostname defaults.
+- Compose healthcheck + `depends_on` wiring so api/worker wait for postgres/redis.
 
 ## What I Had to Fix
 
