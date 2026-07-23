@@ -25,7 +25,7 @@ mcareers/
 ├── requirements.txt
 │
 ├── app/
-│   ├── main.py                  # FastAPI app factory + uvicorn entrypoint
+│   ├── main.py                  # FastAPI app + startup/shutdown events + uvicorn entrypoint
 │   ├── worker.py                # Worker process entrypoint (feeder + executor loops)
 │   ├── config.py                # Settings from env vars (DB URL, Redis URL, lease TTL, etc.)
 │   │
@@ -176,15 +176,15 @@ mcareers/
 **So that** work is queued for async processing
 
 **Tasks**
-- [ ] `app/api/schemas.py` — `JobCreate`, `JobResponse`
-- [ ] `app/api/routes/jobs.py` — `POST /jobs`
-- [ ] `app/services/job_service.py` — persist job (`status=pending`), enqueue to Redis
-- [ ] `app/main.py` — mount routes, lifespan hooks
+- [x] `app/api/schemas.py` — `JobCreate`, `JobResponse`
+- [x] `app/api/routes/jobs.py` — `POST /jobs`
+- [x] `app/services/job_service.py` — persist job (`status=pending`), enqueue to Redis
+- [x] `app/main.py` — mount routes, `@app.on_event` startup/shutdown
 
 **Acceptance criteria**
-- [ ] `POST /jobs` with `job_type` + `payload` returns `201` + job `id`
-- [ ] Job row exists in Postgres with `status=pending`
-- [ ] Job ID appears in Redis `jobs:pending` ZSET
+- [x] `POST /jobs` with `job_type` + `payload` returns `201` + job `id`
+- [x] Job row exists in Postgres with `status=pending`
+- [x] Job ID appears in Redis `jobs:pending` ZSET
 
 ---
 

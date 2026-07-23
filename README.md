@@ -22,6 +22,20 @@ Services:
 
 ## How to run tests
 
+```bash
+# Inside the running stack (uses compose service hostnames):
+docker compose exec api python -m pytest -q
+
+# Or on the host (Postgres + Redis on localhost):
+pytest -q
+```
+
 ## How to submit a test job (example request)
+
+```bash
+curl -s -X POST http://localhost:8000/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"job_type":"email","payload":{"to":"user@example.com"}}'
+```
 
 ## Brief architecture overview
