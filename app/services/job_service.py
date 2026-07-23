@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import JobCreate
@@ -48,3 +50,7 @@ async def submit_job(
         job.status.value,
     )
     return job
+
+
+async def get_job(session: AsyncSession, job_id: UUID) -> Job | None:
+    return await session.scalar(select(Job).where(Job.id == job_id))

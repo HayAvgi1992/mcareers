@@ -195,11 +195,11 @@ mcareers/
 **So that** I can track progress
 
 **Tasks**
-- [ ] `GET /jobs/{id}` — return status, result, error, timestamps, progress
+- [x] `GET /jobs/{id}` — return status, result, error, timestamps, progress
 
 **Acceptance criteria**
-- [ ] Returns full job details for existing ID
-- [ ] Returns `404` for unknown ID
+- [x] Returns full job details for existing ID
+- [x] Returns `404` for unknown ID
 
 ---
 

@@ -25,4 +25,13 @@ class JobResponse(BaseModel):
     status: JobStatus
     priority: int
     payload: dict[str, Any]
+    progress_pct: int
+    attempt_count: int
+    max_attempts: int
+    result: dict[str, Any] | None = None
+    error_message: str | None = None
     created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    scheduled_at: datetime | None = None
+    next_run_at: datetime | None = None

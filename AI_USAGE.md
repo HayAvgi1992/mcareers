@@ -6,6 +6,7 @@
 - Cursor (Grok) for Story 0.2 docker-compose / Dockerfile / boot stubs
 - Cursor (Grok) for Story 0.3 DB session/models + Redis queue client
 - Cursor (Grok) for Story 1.1 submit job API (schemas, service, route, tests)
+- Cursor (Grok) for Story 1.2 get job API
 
 ## What Helped Most
 
