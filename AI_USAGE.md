@@ -7,6 +7,7 @@
 - Cursor (Grok) for Story 0.3 DB session/models + Redis queue client
 - Cursor (Grok) for Story 1.1 submit job API (schemas, service, route, tests)
 - Cursor (Grok) for Story 1.2 get job API
+- Cursor (Grok) for Story 1.3 mock handlers + registry
 
 ## What Helped Most
 

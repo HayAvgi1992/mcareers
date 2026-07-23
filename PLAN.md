@@ -210,14 +210,14 @@ mcareers/
 **So that** each job runs the correct logic
 
 **Tasks**
-- [ ] `app/jobs/base.py` — handler interface (`async def run(job) -> result`)
-- [ ] `app/jobs/registry.py` — map type → handler
-- [ ] Implement `email`, `webhook`, `report`, `batch` handlers per spec (sleep, mock results, webhook 80/20)
+- [x] `app/jobs/base.py` — handler interface (`async def run(job) -> result`)
+- [x] `app/jobs/registry.py` — map type → handler
+- [x] Implement `email`, `webhook`, `report`, `batch` handlers per spec (sleep, mock results, webhook 80/20)
 
 **Acceptance criteria**
-- [ ] Each handler returns JSON result matching spec
-- [ ] Webhook fails ~20% of the time (deterministic seed in tests optional)
-- [ ] Unknown `job_type` raises clear error
+- [x] Each handler returns JSON result matching spec
+- [x] Webhook fails ~20% of the time (deterministic seed in tests optional)
+- [x] Unknown `job_type` raises clear error
 
 ---
 
