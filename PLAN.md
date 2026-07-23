@@ -26,7 +26,6 @@ mcareers/
 │
 ├── app/
 │   ├── main.py                  # FastAPI app + startup/shutdown events + uvicorn entrypoint
-│   ├── worker.py                # Worker process entrypoint (feeder + executor loops)
 │   ├── config.py                # Settings from env vars (DB URL, Redis URL, lease TTL, etc.)
 │   │
 │   ├── api/
@@ -50,6 +49,7 @@ mcareers/
 │   │   └── idempotency.py       # Duplicate-key lookup + 24h cleanup helper
 │   │
 │   ├── worker/
+│   │   ├── __main__.py          # Worker process entrypoint (`python -m app.worker`)
 │   │   ├── feeder.py            # Poll DB → promote ready pending jobs to Redis
 │   │   ├── claim.py             # Atomic DB claim (pending → processing + lease)
 │   │   ├── executor.py          # Pop Redis → claim → run handler → finalize
@@ -228,14 +228,14 @@ mcareers/
 **So that** submitted jobs complete
 
 **Tasks**
-- [ ] `app/worker/claim.py` — `UPDATE … WHERE status=pending` + set lease
-- [ ] `app/worker/executor.py` — pop Redis → claim DB → run handler → mark completed
-- [ ] `app/worker.py` — start executor loop
+- [x] `app/worker/claim.py` — `UPDATE … WHERE status=pending` + set lease
+- [x] `app/worker/executor.py` — pop Redis → claim DB → run handler → mark completed
+- [x] `app/worker/__main__.py` — start executor loop (`python -m app.worker`)
 
 **Acceptance criteria**
-- [ ] Submitted job transitions: `pending → processing → completed`
-- [ ] Result stored in DB
-- [ ] `started_at` / `completed_at` populated
+- [x] Submitted job transitions: `pending → processing → completed`
+- [x] Result stored in DB
+- [x] `started_at` / `completed_at` populated
 
 ---
 

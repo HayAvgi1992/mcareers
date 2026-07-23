@@ -8,6 +8,7 @@
 - Cursor (Grok) for Story 1.1 submit job API (schemas, service, route, tests)
 - Cursor (Grok) for Story 1.2 get job API
 - Cursor (Grok) for Story 1.3 mock handlers + registry
+- Cursor (Grok) for Story 1.4 worker claim + executor loop
 
 ## What Helped Most
 
@@ -18,7 +19,7 @@
 
 ## What I Had to Fix
 
-[Describe 1-2 cases where AI gave incorrect advice — especially around concurrency]
+- Story 1.4: `app/worker.py` and `app/worker/` cannot coexist — moved the entrypoint to `app/worker/__main__.py` so `python -m app.worker` still works.
 
 ## What AI Struggled With
 

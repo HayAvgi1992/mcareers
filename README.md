@@ -30,12 +30,46 @@ docker compose exec api python -m pytest -q
 pytest -q
 ```
 
-## How to submit a test job (example request)
+## Manual smoke test (submit → DB → API)
+
+With the stack running (`docker compose up --build`):
+
+### 1. Submit a job
 
 ```bash
 curl -s -X POST http://localhost:8000/jobs \
   -H 'Content-Type: application/json' \
-  -d '{"job_type":"email","payload":{"to":"user@example.com"}}'
+  -d '{"job_type":"email","payload":{"to":"user@example.com"},"priority":1}' | jq
 ```
+
+Copy the `id` from the response.
+
+### 2. Read it via API
+
+```bash
+curl -s http://localhost:8000/jobs/<JOB_ID> | jq
+```
+
+Expect `status: "completed"` within ~1s for `email` jobs (worker executor is running). Poll with:
+
+```bash
+curl -s http://localhost:8000/jobs/<JOB_ID> | jq '.status, .result'
+```
+
+### 3. Check Postgres
+
+```bash
+docker compose exec postgres \
+  psql -U postgres -d mcareers \
+  -c "SELECT id, job_type, status, priority, payload, created_at FROM jobs ORDER BY created_at DESC LIMIT 5;"
+```
+
+### 4. Check Redis queue (optional)
+
+```bash
+docker compose exec redis redis-cli ZRANGE jobs:pending 0 -1 WITHSCORES
+```
+
+Your job UUID should appear in `jobs:pending`.
 
 ## Brief architecture overview

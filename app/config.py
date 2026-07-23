@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # How long a worker holds a processing lease before a reaper may reclaim it.
     worker_lease_seconds: int = 60
 
+    # Idle sleep when the Redis pending queue is empty.
+    executor_poll_interval_seconds: float = 0.5
+
     # Scheduler poll interval when promoting ready pending jobs to Redis.
     scheduler_poll_interval_seconds: float = 1.0
 
