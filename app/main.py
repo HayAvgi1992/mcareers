@@ -2,7 +2,23 @@
 
 from fastapi import FastAPI
 
+from app.db.session import check_db, dispose_engine
+from app.queue.client import QueueClient
+
 app = FastAPI(title="mcareers", version="0.1.0")
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    await check_db()
+    queue = await QueueClient.connect()
+    app.state.queue = queue
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    await app.state.queue.close()
+    await dispose_engine()
 
 
 @app.get("/")

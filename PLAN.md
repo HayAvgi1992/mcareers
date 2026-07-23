@@ -155,15 +155,15 @@ mcareers/
 **So that** API and worker use the same connection patterns
 
 **Tasks**
-- [ ] `app/db/session.py` — async SQLAlchemy session
-- [ ] `app/db/models.py` — `Job`, `JobLog` ORM models matching `schema.sql`
-- [ ] `app/queue/client.py` — async Redis connection
-- [ ] `app/queue/keys.py` — key constants + `priority_score(priority, created_at)`
+- [x] `app/db/session.py` — async SQLAlchemy session
+- [x] `app/db/models.py` — `Job`, `JobLog` ORM models matching `schema.sql`
+- [x] `app/queue/client.py` — async Redis connection
+- [x] `app/queue/keys.py` — key constants + `priority_score(priority, created_at)`
 
 **Acceptance criteria**
-- [ ] API startup connects to DB and Redis
-- [ ] Worker startup connects to DB and Redis
-- [ ] ORM `Job` model matches schema columns
+- [x] API startup connects to DB and Redis
+- [x] Worker startup connects to DB and Redis
+- [x] ORM `Job` model matches schema columns
 
 ---
 
