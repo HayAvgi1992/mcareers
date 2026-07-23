@@ -11,6 +11,7 @@ import uuid
 from app.db.session import check_db, dispose_engine
 from app.queue.client import QueueClient
 from app.worker.executor import run_executor_loop
+from app.worker.feeder import run_feeder_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,7 +30,10 @@ async def run() -> None:
     worker_id = _make_worker_id()
     logger.info("worker_connected worker_id=%s", worker_id)
     try:
-        await run_executor_loop(queue, worker_id)
+        await asyncio.gather(
+            run_executor_loop(queue, worker_id),
+            run_feeder_loop(queue),
+        )
     finally:
         await queue.close()
         await dispose_engine()

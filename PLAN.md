@@ -246,13 +246,13 @@ mcareers/
 **So that** retries and recovery don't require the executor to re-enqueue
 
 **Tasks**
-- [ ] `app/worker/feeder.py` — query ready pending jobs, `ZADD jobs:pending`
-- [ ] Run feeder alongside executor in `worker.py`
+- [x] `app/worker/feeder.py` — query ready pending jobs, `ZADD jobs:pending`
+- [x] Run feeder alongside executor in `worker.py`
 
 **Acceptance criteria**
-- [ ] New submissions reach Redis even if not enqueued by API (recovery path)
-- [ ] Jobs with future `next_run_at` are not enqueued
-- [ ] Feeder respects priority ordering in ZSET score
+- [x] New submissions reach Redis even if not enqueued by API (recovery path)
+- [x] Jobs with future `next_run_at` are not enqueued
+- [x] Feeder respects priority ordering in ZSET score
 
 ---
 

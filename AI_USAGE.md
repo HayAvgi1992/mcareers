@@ -9,6 +9,7 @@
 - Cursor (Grok) for Story 1.2 get job API
 - Cursor (Grok) for Story 1.3 mock handlers + registry
 - Cursor (Grok) for Story 1.4 worker claim + executor loop
+- Cursor (Grok) for Story 1.5 DB feeder loop
 
 ## What Helped Most
 

@@ -24,8 +24,14 @@ class QueueClient:
         return cls(redis)
 
 
-    async def enqueue(self, job_id: uuid.UUID, score: float) -> None:
-        await self._redis.zadd(JOBS_PENDING, {str(job_id): score})
+    async def enqueue(
+        self, job_id: uuid.UUID, score: float, *, nx: bool = False
+    ) -> bool:
+        """Add job to pending ZSET. With nx=True, only if not already present."""
+        added = await self._redis.zadd(
+            JOBS_PENDING, {str(job_id): score}, nx=nx
+        )
+        return bool(added)
 
     async def dequeue(self) -> uuid.UUID | None:
         """Pop the highest-priority ready job ID (lowest ZSET score)."""
