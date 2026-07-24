@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import JobCreate
@@ -14,6 +15,10 @@ from app.config import settings
 from app.db.models import Job, JobStatus
 from app.queue.client import QueueClient
 from app.queue.keys import priority_score
+from app.services.idempotency import (
+    find_job_by_idempotency_key,
+    normalize_idempotency_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,17 +35,52 @@ async def submit_job(
     session: AsyncSession,
     queue: QueueClient,
     data: JobCreate,
-) -> Job:
-    """Persist a pending job, then enqueue to Redis for dispatch."""
+    *,
+    idempotency_key: str | None = None,
+) -> tuple[Job, bool]:
+    """
+    Persist a pending job, then enqueue to Redis.
+    Returns (job, created). created=False for idempotent duplicates.
+    """
+    key = normalize_idempotency_key(idempotency_key)
+    if key is not None:
+        existing = await find_job_by_idempotency_key(session, key)
+        if existing is not None:
+            logger.info(
+                "job_submitted job_id=%s job_type=%s status=%s duplicate=true",
+                existing.id,
+                existing.job_type.value,
+                existing.status.value,
+            )
+            return existing, False
+
     job = Job(
         job_type=data.job_type,
         payload=data.payload,
         priority=data.priority,
         status=JobStatus.pending,
         max_attempts=settings.default_max_attempts,
+        idempotency_key=key,
     )
     session.add(job)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Race condition: concurrent duplicate insert on the partial unique index.
+        await session.rollback() # rollback the transaction to avoid the duplicate insert
+        if key is None: # if the idempotency key is not provided, raise an error (means the error is not a duplicate insert with the same idempotency key)
+            raise
+        existing = await find_job_by_idempotency_key(session, key)
+        if existing is None: # another constraint violation occurred
+            raise # raise the original error to the caller
+        logger.info(
+            "job_submitted job_id=%s job_type=%s status=%s duplicate=true",
+            existing.id,
+            existing.job_type.value,
+            existing.status.value,
+        )
+        return existing, False # return the existing job and False to indicate that the job was not created
+
     await session.refresh(job)
 
     logger.info(
@@ -58,7 +98,7 @@ async def submit_job(
         job.job_type.value,
         job.status.value,
     )
-    return job
+    return job, True
 
 
 async def get_job(session: AsyncSession, job_id: UUID) -> Job | None:

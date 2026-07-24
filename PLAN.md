@@ -336,16 +336,16 @@ mcareers/
 **So that** retries are safe
 
 **Tasks**
-- [ ] `app/services/idempotency.py`
-- [ ] Accept optional `Idempotency-Key` header or body field
-- [ ] `201` new · `200` duplicate → `{ id, status }` only
-- [ ] No re-enqueue on duplicate
-- [ ] `tests/test_idempotency.py`
+- [x] `app/services/idempotency.py`
+- [x] Accept optional `Idempotency-Key` header
+- [x] `201` new · `200` duplicate → `{ id, status }` only
+- [x] No re-enqueue on duplicate
+- [x] `tests/test_idempotency.py`
 
 **Acceptance criteria**
-- [ ] Same key within 24h returns same job
-- [ ] Duplicate does not create row or Redis entry
-- [ ] Cleanup helper nulls keys older than 24h
+- [x] Same key within 24h returns same job
+- [x] Duplicate does not create row or Redis entry
+- [x] Cleanup helper nulls keys older than 24h
 
 ---
 

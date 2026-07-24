@@ -2,28 +2,53 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db, get_queue
-from app.api.schemas import JobCreate, JobResponse
+from app.api.schemas import IdempotentJobResponse, JobCreate, JobResponse
 from app.queue.client import QueueClient
 from app.services import job_service
+from app.services.idempotency import InvalidIdempotencyKeyError
 from app.services.job_service import JobConflictError, JobNotFoundError
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-@router.post("", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
+@router.post("")
 async def create_job(
     body: JobCreate,
     session: AsyncSession = Depends(get_db),
     queue: QueueClient = Depends(get_queue),
-) -> JobResponse:
-    job = await job_service.submit_job(session, queue, body)
-    return JobResponse.model_validate(job)
+    idempotency_key: Annotated[
+        str | None, Header(alias="Idempotency-Key")
+    ] = None,
+) -> JSONResponse:
+    try:
+        job, created = await job_service.submit_job(
+            session, queue, body, idempotency_key=idempotency_key
+        )
+    except InvalidIdempotencyKeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from None # without traceback, clean error message
+
+    if created:
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content=JobResponse.model_validate(job).model_dump(mode="json"),
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=IdempotentJobResponse(
+            id=job.id, status=job.status
+        ).model_dump(mode="json"),
+    )
 
 
 @router.get("/{job_id}", response_model=JobResponse)

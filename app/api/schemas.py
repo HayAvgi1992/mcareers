@@ -35,3 +35,10 @@ class JobResponse(BaseModel):
     completed_at: datetime | None = None
     scheduled_at: datetime | None = None
     next_run_at: datetime | None = None
+
+
+class IdempotentJobResponse(BaseModel):
+    """Duplicate submission response — id and status only."""
+
+    id: UUID
+    status: JobStatus
