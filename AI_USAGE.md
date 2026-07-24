@@ -10,6 +10,8 @@
 - Cursor (Grok) for Story 1.3 mock handlers + registry
 - Cursor (Grok) for Story 1.4 worker claim + executor loop
 - Cursor (Grok) for Story 1.5 DB feeder loop
+- Cursor (Grok) for Story 2.1 priority processing tests
+- Cursor (Grok) for Story 2.2 retry backoff
 
 ## What Helped Most
 

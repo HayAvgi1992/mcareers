@@ -265,13 +265,13 @@ mcareers/
 **So that** urgent work isn't blocked
 
 **Tasks**
-- [ ] Accept `priority` on submit (default 0)
-- [ ] Use composite ZSET score in enqueue
-- [ ] `tests/test_priority.py`
+- [x] Accept `priority` on submit (default 0)
+- [x] Use composite ZSET score in enqueue
+- [x] `tests/test_priority.py`
 
 **Acceptance criteria**
-- [ ] Submit low then high priority; high completes first
-- [ ] Same priority → FIFO by `created_at`
+- [x] Submit low then high priority; high completes first
+- [x] Same priority → FIFO by `created_at`
 
 ---
 
@@ -282,15 +282,15 @@ mcareers/
 **So that** transient failures recover without manual intervention
 
 **Tasks**
-- [ ] `app/worker/retry.py` — backoff: 0s → 30s → 2min; max 3 attempts
-- [ ] On failure: worker updates DB only (`next_run_at`, `attempt_count`, `status=pending`)
-- [ ] Feeder picks up when `next_run_at <= now()`
-- [ ] `tests/test_retry.py`
+- [x] `app/worker/retry.py` — backoff: 0s → 30s → 2min; max 3 attempts
+- [x] On failure: worker updates DB only (`next_run_at`, `attempt_count`, `status=pending`)
+- [x] Feeder picks up when `next_run_at <= now()`
+- [x] `tests/test_retry.py`
 
 **Acceptance criteria**
-- [ ] Webhook job retries on simulated failure
-- [ ] After 3 failures → permanent `failed`
-- [ ] Worker does **not** push to Redis on failure
+- [x] Webhook job retries on simulated failure
+- [x] After 3 failures → permanent `failed`
+- [x] Worker does **not** push to Redis on failure
 
 ---
 

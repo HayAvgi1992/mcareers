@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 # Prefer env already injected by compose. For host runs, default to localhost
 # so we don't pick up docker service hostnames from .env.
@@ -10,7 +11,11 @@ os.environ.setdefault(
     "DATABASE_URL",
     "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/mcareers",
 )
-os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6379/0")
+
+# Tests dequeue from DB 15 , worker on DB 0. cannot steal test queue
+_redis = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
+_redis = re.sub(r"/\d+$", "", _redis.rstrip("/"))
+os.environ["REDIS_URL"] = f"{_redis}/15"
 
 import pytest
 from httpx import ASGITransport, AsyncClient

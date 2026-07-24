@@ -14,6 +14,7 @@ from app.jobs.base import HandlerError, UnknownJobTypeError
 from app.jobs.registry import get_handler
 from app.queue.client import QueueClient
 from app.worker.claim import claim_job
+from app.worker.retry import apply_failure
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +31,7 @@ async def _complete_job(session, job: Job, result: dict[str, Any]) -> None:
     job.progress_pct = 100
     job.completed_at = datetime.now(UTC)
     job.error_message = None
-    job.leased_until = None
-    await session.commit()
-
-
-async def _fail_job(session, job: Job, error_message: str) -> None:
-    """Mark permanently failed (retry/backoff lands in Story 2.2)."""
-    job.status = JobStatus.failed
-    job.error_message = error_message
-    job.completed_at = datetime.now(UTC)
+    job.next_run_at = None
     job.leased_until = None
     await session.commit()
 
@@ -87,22 +80,20 @@ async def process_one(queue: QueueClient, worker_id: str) -> bool:
                 job.job_type.value,
                 JobStatus.completed.value,
             )
-        except (HandlerError, UnknownJobTypeError) as exc:
-            await _fail_job(session, job, _safe_error_message(exc))
-            logger.warning(
-                "job_failed job_id=%s job_type=%s error_message=%s",
+        except UnknownJobTypeError as exc:
+            # Unknown type will not succeed on retry — fail permanently.
+            await apply_failure(
+                session, job, _safe_error_message(exc), permanent=True
+            )
+        except (HandlerError, Exception) as exc:
+            log = logger.exception if not isinstance(exc, HandlerError) else logger.warning
+            log(
+                "job_handler_error job_id=%s job_type=%s error_message=%s",
                 job.id,
                 job.job_type.value,
                 _safe_error_message(exc),
             )
-        except Exception as exc:
-            await _fail_job(session, job, _safe_error_message(exc))
-            logger.exception(
-                "job_failed job_id=%s job_type=%s error_message=%s",
-                job.id,
-                job.job_type.value,
-                _safe_error_message(exc),
-            )
+            await apply_failure(session, job, _safe_error_message(exc))
 
     return True
 
