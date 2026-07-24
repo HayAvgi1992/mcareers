@@ -17,6 +17,7 @@
 - Cursor (Grok) for Story 2.5 idempotency
 - Cursor (Grok) for Story 2.6 list jobs with filters
 - Cursor (Grok) for Story 2.7 core test suite
+- Cursor (Grok) for Story 3.1 scheduled jobs
 
 ## What Helped Most
 

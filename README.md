@@ -62,6 +62,16 @@ curl -s http://localhost:8000/jobs/<JOB_ID> | jq '.status, .result'
 curl -s 'http://localhost:8000/jobs?status=pending&job_type=email&limit=20&offset=0' | jq
 ```
 
+### Schedule a job for later
+
+```bash
+curl -s -X POST http://localhost:8000/jobs \
+  -H 'Content-Type: application/json' \
+  -d "{\"job_type\":\"email\",\"payload\":{\"to\":\"later@example.com\"},\"scheduled_at\":\"$(date -u -d '+2 minutes' +%Y-%m-%dT%H:%M:%SZ)\"}" | jq
+```
+
+Expect `status: "scheduled"`. The worker scheduler promotes it to `pending` when due (~1s latency).
+
 ### 3. Check Postgres
 
 ```bash

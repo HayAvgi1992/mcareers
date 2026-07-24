@@ -12,6 +12,7 @@ from app.db.session import check_db, dispose_engine
 from app.queue.client import QueueClient
 from app.worker.executor import run_executor_loop
 from app.worker.feeder import run_feeder_loop
+from app.worker.scheduler import run_scheduler_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +34,7 @@ async def run() -> None:
         await asyncio.gather(
             run_executor_loop(queue, worker_id),
             run_feeder_loop(queue),
+            run_scheduler_loop(queue),
         )
     finally:
         await queue.close()

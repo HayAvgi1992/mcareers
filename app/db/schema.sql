@@ -68,6 +68,11 @@ CREATE INDEX idx_jobs_pending_ready
     ON jobs (priority DESC, created_at ASC)
     WHERE status = 'pending';
 
+-- Scheduler: due scheduled jobs.
+CREATE INDEX idx_jobs_scheduled_at
+    ON jobs (scheduled_at)
+    WHERE status = 'scheduled';
+
 -- API list/filter endpoints.
 CREATE INDEX idx_jobs_status ON jobs (status);
 CREATE INDEX idx_jobs_job_type ON jobs (job_type);

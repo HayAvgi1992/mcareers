@@ -39,7 +39,7 @@ async def submit_job(
     idempotency_key: str | None = None,
 ) -> tuple[Job, bool]:
     """
-    Persist a pending job, then enqueue to Redis.
+    Persist a job, then enqueue to Redis (pending or scheduled).
     Returns (job, created). created=False for idempotent duplicates.
     """
     key = normalize_idempotency_key(idempotency_key)
@@ -54,13 +54,16 @@ async def submit_job(
             )
             return existing, False
 
+    is_scheduled = data.scheduled_at is not None
     job = Job(
         job_type=data.job_type,
         payload=data.payload,
         priority=data.priority,
-        status=JobStatus.pending,
+        status=JobStatus.scheduled if is_scheduled else JobStatus.pending,
         max_attempts=settings.default_max_attempts,
         idempotency_key=key,
+        scheduled_at=data.scheduled_at,
+        next_run_at=data.scheduled_at if is_scheduled else None,
     )
     session.add(job)
     try:
@@ -90,14 +93,25 @@ async def submit_job(
         job.status.value,
     )
 
-    # Postgres committed first; Redis is dispatch-only (feeder can recover later).
-    await queue.enqueue(job.id, priority_score(job.priority, job.created_at))
-    logger.info(
-        "job_enqueued job_id=%s job_type=%s status=%s",
-        job.id,
-        job.job_type.value,
-        job.status.value,
-    )
+    # Postgres committed first; Redis is dispatch-only (feeder/scheduler recover).
+    if is_scheduled:
+        assert job.scheduled_at is not None
+        await queue.schedule(job.id, job.scheduled_at)
+        logger.info(
+            "job_scheduled job_id=%s job_type=%s status=%s scheduled_at=%s",
+            job.id,
+            job.job_type.value,
+            job.status.value,
+            job.scheduled_at.isoformat(),
+        )
+    else:
+        await queue.enqueue(job.id, priority_score(job.priority, job.created_at))
+        logger.info(
+            "job_enqueued job_id=%s job_type=%s status=%s",
+            job.id,
+            job.job_type.value,
+            job.status.value,
+        )
     return job, True
 
 
@@ -141,15 +155,16 @@ async def cancel_job(
     job_id: UUID,
 ) -> Job:
     """
-    Cancel a pending job. Postgres is updated first; Redis ZREM is best-effort
-    cleanup (stale pops still fail the DB claim).
+    Cancel a pending or scheduled job. Postgres is updated first; Redis ZREM
+    is best-effort cleanup (stale pops still fail the DB claim/promote).
     """
     job = await get_job(session, job_id)
     if job is None:
         raise JobNotFoundError(f"job {job_id} not found")
-    if job.status != JobStatus.pending:
+    if job.status not in (JobStatus.pending, JobStatus.scheduled):
         raise JobConflictError(
-            f"only pending jobs can be cancelled (status={job.status.value})"
+            "only pending or scheduled jobs can be cancelled "
+            f"(status={job.status.value})"
         )
 
     job.status = JobStatus.cancelled

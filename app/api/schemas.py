@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.db.models import JobStatus, JobType
 
@@ -15,6 +15,20 @@ class JobCreate(BaseModel):
     job_type: JobType
     payload: dict[str, Any] = Field(default_factory=dict)
     priority: int = Field(default=0, ge=-1000, le=1000)
+    scheduled_at: datetime | None = None
+
+    @field_validator("scheduled_at")
+    @classmethod
+    def scheduled_at_must_be_future(
+        cls, value: datetime | None
+    ) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        if value <= datetime.now(UTC):
+            raise ValueError("scheduled_at must be in the future")
+        return value
 
 
 class JobResponse(BaseModel):

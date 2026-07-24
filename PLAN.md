@@ -391,14 +391,14 @@ mcareers/
 **So that** work runs at a specific time
 
 **Tasks**
-- [ ] Submit with `scheduled_at` → `status=scheduled`, `ZADD jobs:scheduled`
-- [ ] Scheduler loop in worker (adaptive sleep, batch promote)
-- [ ] Cancel scheduled jobs
+- [x] Submit with `scheduled_at` → `status=scheduled`, `ZADD jobs:scheduled`
+- [x] Scheduler loop in worker (adaptive sleep, batch promote)
+- [x] Cancel scheduled jobs
 
 **Acceptance criteria**
-- [ ] Job not processed before `scheduled_at`
-- [ ] Promoted to pending and enqueued when due
-- [ ] Sub-second to ~1s scheduling latency
+- [x] Job not processed before `scheduled_at`
+- [x] Promoted to pending and enqueued when due
+- [x] Sub-second to ~1s scheduling latency
 
 ---
 
@@ -524,7 +524,7 @@ Move permanently failed jobs to a separate Redis list / DB flag for inspection.
 | `POST` | `/jobs` | 1.1 | 201 create · 200 idempotent duplicate |
 | `GET` | `/jobs/{id}` | 1.2 | Status, result, error, progress |
 | `GET` | `/jobs` | 2.6 | Filter by status, type |
-| `POST` | `/jobs/{id}/cancel` | 2.4 | Pending only (scheduled in 3.1) |
+| `POST` | `/jobs/{id}/cancel` | 2.4 | Pending or scheduled |
 | `POST` | `/jobs/{id}/retry` | 2.3 | Failed only; increments max_attempts |
 | `GET` | `/health` | 3.3 | Should-have |
 
