@@ -12,6 +12,7 @@
 - Cursor (Grok) for Story 1.5 DB feeder loop
 - Cursor (Grok) for Story 2.1 priority processing tests
 - Cursor (Grok) for Story 2.2 retry backoff
+- Cursor (Grok) for Story 2.3 manual retry endpoint
 
 ## What Helped Most
 

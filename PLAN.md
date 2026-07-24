@@ -301,13 +301,13 @@ mcareers/
 **So that** I can recover after fixing an upstream issue
 
 **Tasks**
-- [ ] `POST /jobs/{id}/retry`
-- [ ] Increment `max_attempts`, set `pending`, `next_run_at=now()`
+- [x] `POST /jobs/{id}/retry`
+- [x] Increment `max_attempts`, set `pending`, `next_run_at=now()`
 
 **Acceptance criteria**
-- [ ] Failed job can be retried manually
-- [ ] Non-failed job returns appropriate error
-- [ ] Feeder enqueues on next cycle
+- [x] Failed job can be retried manually
+- [x] Non-failed job returns appropriate error
+- [x] Feeder enqueues on next cycle
 
 ---
 

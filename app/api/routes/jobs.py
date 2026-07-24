@@ -11,6 +11,7 @@ from app.api.dependencies import get_db, get_queue
 from app.api.schemas import JobCreate, JobResponse
 from app.queue.client import QueueClient
 from app.services import job_service
+from app.services.job_service import JobConflictError, JobNotFoundError
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -36,4 +37,24 @@ async def read_job(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Job not found",
         )
+    return JobResponse.model_validate(job)
+
+
+@router.post("/{job_id}/retry", response_model=JobResponse)
+async def retry_job(
+    job_id: UUID,
+    session: AsyncSession = Depends(get_db),
+) -> JobResponse:
+    try:
+        job = await job_service.manual_retry(session, job_id)
+    except JobNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        ) from None
+    except JobConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from None
     return JobResponse.model_validate(job)
