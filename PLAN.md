@@ -356,11 +356,11 @@ mcareers/
 **So that** I can inspect the queue
 
 **Tasks**
-- [ ] `GET /jobs?status=&job_type=&limit=&offset=`
+- [x] `GET /jobs?status=&job_type=&limit=&offset=`
 
 **Acceptance criteria**
-- [ ] Filters work independently and combined
-- [ ] Paginated response with total count
+- [x] Filters work independently and combined
+- [x] Paginated response with total count
 
 ---
 

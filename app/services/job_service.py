@@ -6,13 +6,13 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import JobCreate
 from app.config import settings
-from app.db.models import Job, JobStatus
+from app.db.models import Job, JobStatus, JobType
 from app.queue.client import QueueClient
 from app.queue.keys import priority_score
 from app.services.idempotency import (
@@ -103,6 +103,36 @@ async def submit_job(
 
 async def get_job(session: AsyncSession, job_id: UUID) -> Job | None:
     return await session.scalar(select(Job).where(Job.id == job_id))
+
+
+async def list_jobs(
+    session: AsyncSession,
+    *,
+    status: JobStatus | None = None,
+    job_type: JobType | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[Job], int]:
+    """Return (jobs page, total matching count). Newest first."""
+    filters = []
+    if status is not None:
+        filters.append(Job.status == status)
+    if job_type is not None:
+        filters.append(Job.job_type == job_type)
+
+    total = await session.scalar(
+        select(func.count()).select_from(Job).where(*filters)
+    )
+    jobs = list(
+        await session.scalars(
+            select(Job)
+            .where(*filters)
+            .order_by(Job.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    )
+    return jobs, int(total or 0)
 
 
 async def cancel_job(

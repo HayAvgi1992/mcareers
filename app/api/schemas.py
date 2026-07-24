@@ -42,3 +42,10 @@ class IdempotentJobResponse(BaseModel):
 
     id: UUID
     status: JobStatus
+
+
+class JobListResponse(BaseModel):
+    items: list[JobResponse]
+    total: int
+    limit: int
+    offset: int

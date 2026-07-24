@@ -56,6 +56,12 @@ Expect `status: "completed"` within ~1s for `email` jobs (worker executor is run
 curl -s http://localhost:8000/jobs/<JOB_ID> | jq '.status, .result'
 ```
 
+### List jobs (filters + pagination)
+
+```bash
+curl -s 'http://localhost:8000/jobs?status=pending&job_type=email&limit=20&offset=0' | jq
+```
+
 ### 3. Check Postgres
 
 ```bash

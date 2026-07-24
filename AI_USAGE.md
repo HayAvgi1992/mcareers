@@ -15,6 +15,7 @@
 - Cursor (Grok) for Story 2.3 manual retry endpoint
 - Cursor (Grok) for Story 2.4 job cancellation
 - Cursor (Grok) for Story 2.5 idempotency
+- Cursor (Grok) for Story 2.6 list jobs with filters
 
 ## What Helped Most
 

@@ -5,12 +5,18 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db, get_queue
-from app.api.schemas import IdempotentJobResponse, JobCreate, JobResponse
+from app.api.schemas import (
+    IdempotentJobResponse,
+    JobCreate,
+    JobListResponse,
+    JobResponse,
+)
+from app.db.models import JobStatus, JobType
 from app.queue.client import QueueClient
 from app.services import job_service
 from app.services.idempotency import InvalidIdempotencyKeyError
@@ -48,6 +54,31 @@ async def create_job(
         content=IdempotentJobResponse(
             id=job.id, status=job.status
         ).model_dump(mode="json"),
+    )
+
+
+@router.get("", response_model=JobListResponse)
+async def list_jobs(
+    session: AsyncSession = Depends(get_db),
+    status_filter: Annotated[
+        JobStatus | None, Query(alias="status")
+    ] = None,
+    job_type: JobType | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> JobListResponse:
+    jobs, total = await job_service.list_jobs(
+        session,
+        status=status_filter,
+        job_type=job_type,
+        limit=limit,
+        offset=offset,
+    )
+    return JobListResponse(
+        items=[JobResponse.model_validate(j) for j in jobs],
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 
