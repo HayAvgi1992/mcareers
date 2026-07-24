@@ -318,14 +318,14 @@ mcareers/
 **So that** unnecessary work isn't processed
 
 **Tasks**
-- [ ] `POST /jobs/{id}/cancel` (or `DELETE`)
-- [ ] DB: `pending → cancelled`; Redis: `ZREM`
-- [ ] `tests/test_cancellation.py`
+- [x] `POST /jobs/{id}/cancel` (or `DELETE`)
+- [x] DB: `pending → cancelled`; Redis: `ZREM`
+- [x] `tests/test_cancellation.py`
 
 **Acceptance criteria**
-- [ ] Pending job cancelled; worker claim fails if already popped
-- [ ] Processing/completed jobs cannot be cancelled
-- [ ] Cancelled job not executed
+- [x] Pending job cancelled; worker claim fails if already popped
+- [x] Processing/completed jobs cannot be cancelled
+- [x] Cancelled job not executed
 
 ---
 

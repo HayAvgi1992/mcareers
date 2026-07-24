@@ -65,6 +65,41 @@ async def get_job(session: AsyncSession, job_id: UUID) -> Job | None:
     return await session.scalar(select(Job).where(Job.id == job_id))
 
 
+async def cancel_job(
+    session: AsyncSession,
+    queue: QueueClient,
+    job_id: UUID,
+) -> Job:
+    """
+    Cancel a pending job. Postgres is updated first; Redis ZREM is best-effort
+    cleanup (stale pops still fail the DB claim).
+    """
+    job = await get_job(session, job_id)
+    if job is None:
+        raise JobNotFoundError(f"job {job_id} not found")
+    if job.status != JobStatus.pending:
+        raise JobConflictError(
+            f"only pending jobs can be cancelled (status={job.status.value})"
+        )
+
+    job.status = JobStatus.cancelled
+    job.next_run_at = None
+    job.leased_until = None
+    job.worker_id = None
+    await session.commit()
+    await session.refresh(job)
+
+    await queue.remove(job_id)
+
+    logger.info(
+        "job_cancelled job_id=%s job_type=%s status=%s",
+        job.id,
+        job.job_type.value,
+        job.status.value,
+    )
+    return job
+
+
 async def manual_retry(session: AsyncSession, job_id: UUID) -> Job:
     """
     Re-open a permanently failed job for one more attempt.

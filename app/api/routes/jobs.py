@@ -40,6 +40,27 @@ async def read_job(
     return JobResponse.model_validate(job)
 
 
+@router.post("/{job_id}/cancel", response_model=JobResponse)
+async def cancel_job(
+    job_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    queue: QueueClient = Depends(get_queue),
+) -> JobResponse:
+    try:
+        job = await job_service.cancel_job(session, queue, job_id)
+    except JobNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        ) from None
+    except JobConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from None
+    return JobResponse.model_validate(job)
+
+
 @router.post("/{job_id}/retry", response_model=JobResponse)
 async def retry_job(
     job_id: UUID,
