@@ -426,12 +426,12 @@ mcareers/
 **So that** I can monitor the system
 
 **Tasks**
-- [ ] `GET /health` — DB + Redis connectivity
-- [ ] Queue depth, counts by status
+- [x] `GET /health` — DB + Redis connectivity
+- [x] Queue depth, counts by status
 
 **Acceptance criteria**
-- [ ] Returns `200` when healthy, `503` when dependency down
-- [ ] Includes pending/processing/failed counts
+- [x] Returns `200` when healthy, `503` when dependency down
+- [x] Includes pending/processing/failed counts
 
 ---
 

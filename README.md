@@ -72,6 +72,12 @@ curl -s -X POST http://localhost:8000/jobs \
 
 Expect `status: "scheduled"`. The worker scheduler promotes it to `pending` when due (~1s latency).
 
+### Health check
+
+```bash
+curl -s http://localhost:8000/health | jq
+```
+
 ### 3. Check Postgres
 
 ```bash

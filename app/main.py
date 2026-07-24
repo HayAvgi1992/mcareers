@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 
+from app.api.routes.health import router as health_router
 from app.api.routes.jobs import router as jobs_router
 from app.db.session import check_db, dispose_engine
 from app.queue.client import QueueClient
@@ -9,6 +10,7 @@ from app.queue.client import QueueClient
 app = FastAPI(title="mcareers", version="0.1.0")
 
 app.include_router(jobs_router)
+app.include_router(health_router)
 
 
 @app.on_event("startup")

@@ -75,6 +75,12 @@ class QueueClient:
     async def remove_scheduled(self, job_id: uuid.UUID) -> None:
         await self._redis.zrem(JOBS_SCHEDULED, str(job_id))
 
+    async def pending_depth(self) -> int:
+        return int(await self._redis.zcard(JOBS_PENDING))
+
+    async def scheduled_depth(self) -> int:
+        return int(await self._redis.zcard(JOBS_SCHEDULED))
+
     async def ping(self) -> bool:
         return bool(await self._redis.ping())
 
