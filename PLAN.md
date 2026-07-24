@@ -371,14 +371,14 @@ mcareers/
 **So that** correctness is verifiable
 
 **Tasks**
-- [ ] `tests/conftest.py` — test DB, Redis, API client, optional worker fixture
-- [ ] Complete `test_submission.py`, `test_completion.py`
-- [ ] All 6 required test files pass in CI/local
+- [x] `tests/conftest.py` — test DB, Redis, API client, optional worker fixture
+- [x] Complete `test_submission.py`, `test_completion.py`
+- [x] All 6 required test files pass in CI/local
 
 **Acceptance criteria**
-- [ ] ≥ 6 meaningful tests covering spec scenarios
-- [ ] Worker logic tested independently of API (direct service/worker calls)
-- [ ] Tests don't depend on external services outside test containers
+- [x] ≥ 6 meaningful tests covering spec scenarios
+- [x] Worker logic tested independently of API (direct service/worker calls)
+- [x] Tests don't depend on external services outside test containers
 
 ---
 
@@ -532,8 +532,8 @@ Move permanently failed jobs to a separate Redis list / DB flag for inspection.
 
 ## Definition of Done (Must-Have)
 
-- [ ] All Phase 0–2 stories complete
-- [ ] `docker-compose up` runs API + worker + postgres + redis
-- [ ] 6 test files pass
-- [ ] DECISIONS.md §1, §3, §4 filled
+- [x] All Phase 0–2 stories complete
+- [x] `docker-compose up` runs API + worker + postgres + redis
+- [x] 6 test files pass
+- [x] DECISIONS.md §1, §3, §4 filled
 - [ ] README sections drafted (can finalize in Phase 5)
