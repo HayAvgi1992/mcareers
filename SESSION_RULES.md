@@ -60,6 +60,8 @@ logger.info("job_claimed", job_id=str(job.id), job_type=job.job_type, status=job
 | `job_manual_retry` | info | Manual retry triggered |
 | `job_claim_skipped` | debug | Redis pop but DB claim failed (stale/cancelled) |
 | `job_feeder_promoted` | debug | Feeder enqueued job(s) from DB to Redis |
+| `job_reaped` | info | Expired processing lease reset to pending |
+| `job_schedule_promoted` | info | Scheduled job promoted to pending |
 
 ### Logging rules
 

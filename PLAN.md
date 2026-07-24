@@ -409,13 +409,13 @@ mcareers/
 **So that** worker crashes don't lose work
 
 **Tasks**
-- [ ] `app/worker/reaper.py` — reset expired leases → pending
-- [ ] Feeder re-enqueues recovered jobs
-- [ ] Fill in DECISIONS.md §2
+- [x] `app/worker/reaper.py` — reset expired leases → pending
+- [x] Feeder re-enqueues recovered jobs
+- [x] Fill in DECISIONS.md §2
 
 **Acceptance criteria**
-- [ ] Job with expired `leased_until` returns to pending
-- [ ] Job eventually completes after recovery
+- [x] Job with expired `leased_until` returns to pending
+- [x] Job eventually completes after recovery
 
 ---
 

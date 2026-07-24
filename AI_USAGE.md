@@ -18,6 +18,7 @@
 - Cursor (Grok) for Story 2.6 list jobs with filters
 - Cursor (Grok) for Story 2.7 core test suite
 - Cursor (Grok) for Story 3.1 scheduled jobs
+- Cursor (Grok) for Story 3.2 worker crash recovery (reaper)
 
 ## What Helped Most
 

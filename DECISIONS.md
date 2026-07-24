@@ -14,11 +14,11 @@ Workers pop the highest-priority job ID from the Redis `jobs:pending` ZSET, then
 
 ## 2. Worker Crash Recovery
 
-**Approach chosen:** Deferred (should-have). Schema includes `leased_until` and `worker_id` columns to support a future reaper.
+**Approach chosen:** Lease + reaper loop. On claim, the worker sets `leased_until = now + worker_lease_seconds`. A reaper periodically finds `status = processing AND leased_until < now()`, resets those rows to `pending` (clears `worker_id` / `leased_until`, sets `next_run_at = NULL`), and leaves Redis alone. The existing DB feeder then re-enqueues recovered jobs into `jobs:pending`.
 
-**Why:** Must-have scope focuses on core submit → process → complete flow first.
+**Why:** Postgres remains source of truth. If a worker dies mid-handler, the lease expires and another worker can claim the job without requiring Redis heartbeats or distributed locks. Keeping enqueue in the feeder avoids duplicate Redis push logic on the recovery path.
 
-**What happens if worker crashes mid-job:** Not yet implemented. Planned approach: a reaper loop will reset jobs where `status = 'processing' AND leased_until < now()` back to `pending` and re-enqueue via the DB feeder.
+**What happens if worker crashes mid-job:** After `leased_until` passes, the reaper returns the job to `pending`. The feeder promotes it to Redis; a live worker claims and runs it again. `attempt_count` is not decremented (the crashed attempt already counted toward `max_attempts`).
 
 ---
 
