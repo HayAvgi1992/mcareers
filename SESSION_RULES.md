@@ -37,7 +37,7 @@ These are locked. If a session needs to change one, stop and update `DECISIONS.m
 
 ## 3. Logging (Required on Every State Transition)
 
-Use **structured JSON logging** (structlog) once logging is set up (Story 3.4). Until then, use a consistent structured pattern that can be swapped to structlog later.
+Use **structured JSON logging** (structlog). See `app/logging_config.py`.
 
 ### Every log must include job context when a job is involved
 

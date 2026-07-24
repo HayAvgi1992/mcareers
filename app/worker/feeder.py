@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from sqlalchemy import func, or_, select
 
 from app.config import settings
 from app.db.models import Job, JobStatus
 from app.db.session import SessionLocal
+from app.logging_config import get_logger
 from app.queue.client import QueueClient
 from app.queue.keys import priority_score
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cap each cycle so a large backlog doesn't stall the event loop.
 _FEEDER_BATCH_SIZE = 100
@@ -47,10 +47,10 @@ async def promote_ready_jobs(
         if added:
             promoted += 1
             logger.debug(
-                "job_feeder_promoted job_id=%s job_type=%s status=%s",
-                job.id,
-                job.job_type.value,
-                job.status.value,
+                "job_feeder_promoted",
+                job_id=str(job.id),
+                job_type=job.job_type.value,
+                status=job.status.value,
             )
     return promoted
 

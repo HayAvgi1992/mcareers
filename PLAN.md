@@ -442,10 +442,10 @@ mcareers/
 **So that** I can trace job lifecycle
 
 **Tasks**
-- [ ] structlog setup with `job_id`, `job_type`, `status` on every transition
+- [x] structlog setup with `job_id`, `job_type`, `status` on every transition
 
 **Acceptance criteria**
-- [ ] Submit, claim, complete, fail, retry, cancel all emit structured logs
+- [x] Submit, claim, complete, fail, retry, cancel all emit structured logs
 
 ---
 

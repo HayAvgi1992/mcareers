@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Job, JobStatus
+from app.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # After attempt N fails, wait this many seconds before attempt N+1.
 # Attempt 1 is immediate on submit (next_run_at NULL) — DECISIONS.md §4.
@@ -45,7 +45,6 @@ async def apply_failure(
     job.leased_until = None
     job.worker_id = None
     job.result = None
-    # if not permanent and should_retry(job.attempt_count, job.max_attempts):
     if not permanent and should_retry(job.attempt_count, job.max_attempts):
         delay = backoff_seconds(job.attempt_count)
         job.status = JobStatus.pending
@@ -54,13 +53,12 @@ async def apply_failure(
         job.completed_at = None
         await session.commit()
         logger.info(
-            "job_retry_scheduled job_id=%s job_type=%s status=%s "
-            "attempt_count=%s next_run_at=%s",
-            job.id,
-            job.job_type.value,
-            job.status.value,
-            job.attempt_count,
-            job.next_run_at.isoformat(),
+            "job_retry_scheduled",
+            job_id=str(job.id),
+            job_type=job.job_type.value,
+            status=job.status.value,
+            attempt_count=job.attempt_count,
+            next_run_at=job.next_run_at.isoformat(),
         )
         return
 
@@ -69,11 +67,10 @@ async def apply_failure(
     job.completed_at = now
     await session.commit()
     logger.warning(
-        "job_failed job_id=%s job_type=%s status=%s attempt_count=%s "
-        "error_message=%s",
-        job.id,
-        job.job_type.value,
-        job.status.value,
-        job.attempt_count,
-        error_message,
+        "job_failed",
+        job_id=str(job.id),
+        job_type=job.job_type.value,
+        status=job.status.value,
+        attempt_count=job.attempt_count,
+        error_message=error_message,
     )

@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from sqlalchemy import func, select, update
 
 from app.config import settings
 from app.db.models import Job, JobStatus
 from app.db.session import SessionLocal
+from app.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _REAPER_BATCH_SIZE = 100
 
@@ -61,11 +61,11 @@ async def reap_expired_leases(*, limit: int = _REAPER_BATCH_SIZE) -> int:
             await session.commit()
             reaped += 1
             logger.info(
-                "job_reaped job_id=%s job_type=%s status=%s attempt_count=%s",
-                job.id,
-                job.job_type.value,
-                JobStatus.pending.value,
-                job.attempt_count,
+                "job_reaped",
+                job_id=str(job.id),
+                job_type=job.job_type.value,
+                status=JobStatus.pending.value,
+                attempt_count=job.attempt_count,
             )
 
     return reaped

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -13,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import JobCreate
 from app.config import settings
 from app.db.models import Job, JobStatus, JobType
+from app.logging_config import get_logger
 from app.queue.client import QueueClient
 from app.queue.keys import priority_score
 from app.services.idempotency import (
@@ -20,7 +20,7 @@ from app.services.idempotency import (
     normalize_idempotency_key,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class JobNotFoundError(Exception):
@@ -47,10 +47,11 @@ async def submit_job(
         existing = await find_job_by_idempotency_key(session, key)
         if existing is not None:
             logger.info(
-                "job_submitted job_id=%s job_type=%s status=%s duplicate=true",
-                existing.id,
-                existing.job_type.value,
-                existing.status.value,
+                "job_submitted",
+                job_id=str(existing.id),
+                job_type=existing.job_type.value,
+                status=existing.status.value,
+                duplicate=True,
             )
             return existing, False
 
@@ -77,20 +78,21 @@ async def submit_job(
         if existing is None: # another constraint violation occurred
             raise # raise the original error to the caller
         logger.info(
-            "job_submitted job_id=%s job_type=%s status=%s duplicate=true",
-            existing.id,
-            existing.job_type.value,
-            existing.status.value,
+            "job_submitted",
+            job_id=str(existing.id),
+            job_type=existing.job_type.value,
+            status=existing.status.value,
+            duplicate=True,
         )
         return existing, False # return the existing job and False to indicate that the job was not created
 
     await session.refresh(job)
 
     logger.info(
-        "job_submitted job_id=%s job_type=%s status=%s",
-        job.id,
-        job.job_type.value,
-        job.status.value,
+        "job_submitted",
+        job_id=str(job.id),
+        job_type=job.job_type.value,
+        status=job.status.value,
     )
 
     # Postgres committed first; Redis is dispatch-only (feeder/scheduler recover).
@@ -98,19 +100,19 @@ async def submit_job(
         assert job.scheduled_at is not None
         await queue.schedule(job.id, job.scheduled_at)
         logger.info(
-            "job_scheduled job_id=%s job_type=%s status=%s scheduled_at=%s",
-            job.id,
-            job.job_type.value,
-            job.status.value,
-            job.scheduled_at.isoformat(),
+            "job_scheduled",
+            job_id=str(job.id),
+            job_type=job.job_type.value,
+            status=job.status.value,
+            scheduled_at=job.scheduled_at.isoformat(),
         )
     else:
         await queue.enqueue(job.id, priority_score(job.priority, job.created_at))
         logger.info(
-            "job_enqueued job_id=%s job_type=%s status=%s",
-            job.id,
-            job.job_type.value,
-            job.status.value,
+            "job_enqueued",
+            job_id=str(job.id),
+            job_type=job.job_type.value,
+            status=job.status.value,
         )
     return job, True
 
@@ -177,10 +179,10 @@ async def cancel_job(
     await queue.remove(job_id)
 
     logger.info(
-        "job_cancelled job_id=%s job_type=%s status=%s",
-        job.id,
-        job.job_type.value,
-        job.status.value,
+        "job_cancelled",
+        job_id=str(job.id),
+        job_type=job.job_type.value,
+        status=job.status.value,
     )
     return job
 
@@ -210,10 +212,10 @@ async def manual_retry(session: AsyncSession, job_id: UUID) -> Job:
     await session.refresh(job)
 
     logger.info(
-        "job_manual_retry job_id=%s job_type=%s status=%s max_attempts=%s",
-        job.id,
-        job.job_type.value,
-        job.status.value,
-        job.max_attempts,
+        "job_manual_retry",
+        job_id=str(job.id),
+        job_type=job.job_type.value,
+        status=job.status.value,
+        max_attempts=job.max_attempts,
     )
     return job
