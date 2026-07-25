@@ -13,7 +13,9 @@ from app.jobs.base import HandlerError
 
 async def run(job: Job) -> dict[str, Any]:
     await asyncio.sleep(settings.webhook_mock_sleep_seconds)
-    url = job.payload.get("url", "")
+    url = job.payload.get("url")
+    if not isinstance(url, str) or not url:
+        raise HandlerError("webhook payload missing required field 'url'")
     # Deterministic per job id so retries of the same attempt are stable in tests.
     rng = random.Random(str(job.id))
     if rng.random() < 0.2:

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import JobCreate
 from app.config import settings
-from app.db.models import Job, JobStatus, JobType
+from app.db.models import Job, JobStatus, JobType, LogLevel
 from app.logging_config import get_logger
 from app.queue.client import QueueClient
 from app.queue.keys import priority_score
@@ -19,6 +19,7 @@ from app.services.idempotency import (
     find_job_by_idempotency_key,
     normalize_idempotency_key,
 )
+from app.services.job_log import append_job_log
 
 logger = get_logger(__name__)
 
@@ -67,6 +68,13 @@ async def submit_job(
         next_run_at=data.scheduled_at if is_scheduled else None,
     )
     session.add(job)
+    await session.flush() # flush the job to the database to get the job id
+    await append_job_log(
+        session,
+        job.id,
+        "job created",
+        metadata={"status": job.status.value, "job_type": job.job_type.value},
+    )
     try:
         await session.commit()
     except IntegrityError:
@@ -173,6 +181,13 @@ async def cancel_job(
     job.next_run_at = None
     job.leased_until = None
     job.worker_id = None
+    await append_job_log(
+        session,
+        job.id,
+        "job cancelled",
+        level=LogLevel.warning,
+        metadata={"status": JobStatus.cancelled.value},
+    )
     await session.commit()
     await session.refresh(job)
 
@@ -211,6 +226,15 @@ async def manual_retry(
     job.leased_until = None
     job.worker_id = None
     job.error_message = None
+    await append_job_log(
+        session,
+        job.id,
+        "manual retry requested",
+        metadata={
+            "status": JobStatus.pending.value,
+            "max_attempts": job.max_attempts,
+        },
+    )
     await session.commit()
     await session.refresh(job)
     await queue.remove_dead_letter(job.id)

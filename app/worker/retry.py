@@ -7,9 +7,10 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db.models import Job, JobStatus
+from app.db.models import Job, JobStatus, LogLevel
 from app.logging_config import get_logger
 from app.queue.client import QueueClient
+from app.services.job_log import append_job_log
 
 logger = get_logger(__name__)
 
@@ -56,6 +57,18 @@ async def apply_failure(
         job.next_run_at = now + timedelta(seconds=delay)
         job.started_at = None
         job.completed_at = None
+        await append_job_log(
+            session,
+            job.id,
+            "retry scheduled",
+            level=LogLevel.warning,
+            metadata={
+                "status": JobStatus.pending.value,
+                "attempt_count": job.attempt_count,
+                "error_message": error_message,
+                "next_run_at": job.next_run_at.isoformat(),
+            },
+        )
         await session.commit()
         logger.info(
             "job_retry_scheduled",
@@ -70,6 +83,17 @@ async def apply_failure(
     job.status = JobStatus.failed
     job.next_run_at = None
     job.completed_at = now
+    await append_job_log(
+        session,
+        job.id,
+        "job failed permanently",
+        level=LogLevel.error,
+        metadata={
+            "status": JobStatus.failed.value,
+            "attempt_count": job.attempt_count,
+            "error_message": error_message,
+        },
+    )
     await session.commit()
     logger.warning(
         "job_failed",

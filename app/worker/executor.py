@@ -7,12 +7,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.config import settings
-from app.db.models import Job, JobStatus, JobType
+from app.db.models import Job, JobStatus, JobType, LogLevel
 from app.db.session import SessionLocal
 from app.jobs.base import HandlerError, UnknownJobTypeError
 from app.jobs.registry import get_handler
 from app.logging_config import get_logger
 from app.queue.client import QueueClient
+from app.services.job_log import append_job_log
 from app.worker.claim import claim_job
 from app.worker.lifecycle import wait_or_stop
 from app.worker.retry import apply_failure
@@ -34,6 +35,12 @@ async def _complete_job(session, job: Job, result: dict[str, Any]) -> None:
     job.error_message = None
     job.next_run_at = None
     job.leased_until = None
+    await append_job_log(
+        session,
+        job.id,
+        "job completed",
+        metadata={"status": JobStatus.completed.value},
+    )
     await session.commit()
 
 
@@ -63,6 +70,18 @@ async def process_one(queue: QueueClient, worker_id: str) -> bool:
         if job is None:
             logger.debug("job_claim_skipped", job_id=str(job_id))
             return True
+
+        await append_job_log(
+            session,
+            job.id,
+            "job started",
+            metadata={
+                "status": job.status.value,
+                "worker_id": worker_id,
+                "attempt_count": job.attempt_count,
+            },
+        )
+        await session.commit()
 
         logger.info(
             "job_claimed",

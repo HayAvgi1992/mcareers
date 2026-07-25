@@ -7,16 +7,16 @@ from typing import Any
 
 from app.config import settings
 from app.db.models import Job
-from app.jobs.base import ProgressReporter
+from app.jobs.base import HandlerError, ProgressReporter
 
 
 async def run(
     job: Job,
     report: ProgressReporter | None = None,
 ) -> dict[str, Any]:
-    items = job.payload.get("items", [])
+    items = job.payload.get("items")
     if not isinstance(items, list):
-        items = []
+        raise HandlerError("batch payload missing required list field 'items'")
 
     total = len(items)
     if total == 0:
