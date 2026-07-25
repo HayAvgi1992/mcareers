@@ -48,7 +48,7 @@
 - Story 3.5: AI added a `stop=` kwarg through `process_one`; we removed it — shutdown is loop-level (`while not stop.is_set()`), finish the in-flight job, then exit.
 - Story 4.1: scaling `worker` also scaled feeder/scheduler/reaper until we split a dedicated `maintenance` process.
 - Story 4.2: progress reporting grew into `HandlerSpec` / bind helpers; we deleted it and marked the story deferred.
-- Story 2.7: first test pass was oversized (~60+); trimmed to a lean suite of the required scenarios (+ feeder tests kept on request).
+- Story 2.7: first test pass was oversized (~60+); trimmed repeatedly to a lean suite (now 10 highest-signal tests).
 - Tests: Redis DB **15** isolation so host pytest does not fight a live worker on DB 0.
 
 ## What AI Struggled With

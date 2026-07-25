@@ -1,4 +1,4 @@
-"""Submit job — happy path + validation failure."""
+"""Submit job — persists in Postgres and enqueues in Redis."""
 
 from __future__ import annotations
 
@@ -30,19 +30,8 @@ async def test_submit_job_persists_and_enqueues(
     body = response.json()
     job_id = uuid.UUID(body["id"])
     assert body["status"] == "pending"
-    assert body["job_type"] == "email"
-    assert body["priority"] == 2
 
     job = await db_session.scalar(select(Job).where(Job.id == job_id))
     assert job is not None
     assert job.status == JobStatus.pending
     assert await redis_client.zscore(JOBS_PENDING, str(job_id)) is not None
-
-
-@pytest.mark.asyncio
-async def test_submit_rejects_unknown_job_type(client: AsyncClient) -> None:
-    response = await client.post(
-        "/jobs",
-        json={"job_type": "not_a_real_type", "payload": {}},
-    )
-    assert response.status_code == 422

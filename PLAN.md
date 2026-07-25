@@ -568,6 +568,6 @@ Move permanently failed jobs to a separate Redis list / DB flag for inspection.
 
 - [x] All Phase 0–2 stories complete
 - [x] `docker-compose up` runs API + worker + postgres + redis
-- [x] 6 test files pass
+- [x] Lean core suite (~10 tests) passes
 - [x] DECISIONS.md §1, §3, §4 filled
 - [x] README sections drafted (can finalize in Phase 5)

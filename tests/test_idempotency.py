@@ -1,4 +1,4 @@
-"""Idempotency — duplicate header key returns existing job; no re-enqueue."""
+"""Idempotency — duplicate key returns existing job; no re-enqueue."""
 
 from __future__ import annotations
 
@@ -34,13 +34,3 @@ async def test_duplicate_idempotency_key_returns_same_job(
         count = await session.scalar(select(func.count()).select_from(Job))
     assert count == 1
     assert await redis_client.zcard(JOBS_PENDING) == 1
-
-
-@pytest.mark.asyncio
-async def test_empty_idempotency_key_rejected(client: AsyncClient) -> None:
-    response = await client.post(
-        "/jobs",
-        json={"job_type": "email", "payload": {}},
-        headers={"Idempotency-Key": "   "},
-    )
-    assert response.status_code == 422

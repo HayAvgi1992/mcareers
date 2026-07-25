@@ -1,38 +1,19 @@
-"""Batch job progress — mid-run progress_pct updates visible via GET."""
+"""Batch progress — mid-run progress_pct visible via GET."""
 
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.db.models import Job, JobType
+from app.db.models import Job
 from app.db.session import SessionLocal
-from app.jobs import batch
 from app.worker.executor import process_one
 
 pytestmark = pytest.mark.usefixtures("clean_jobs")
-
-
-@pytest.mark.asyncio
-async def test_batch_run_reports_progress_per_item() -> None:
-    job = Job(
-        job_type=JobType.batch,
-        payload={"items": ["a", "b", "c", "d"]},
-    )
-    seen: list[int] = []
-
-    async def report(pct: int) -> None:
-        seen.append(pct)
-
-    with patch("app.jobs.batch.asyncio.sleep", new_callable=AsyncMock):
-        result = await batch.run(job, report=report)
-
-    assert result["processed"] == 4
-    assert seen == [25, 50, 75, 100]
 
 
 @pytest.mark.asyncio

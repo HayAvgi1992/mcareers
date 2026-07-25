@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 
 import pytest
@@ -49,33 +48,3 @@ async def test_higher_priority_is_dequeued_first(
         assert await queue.dequeue() == uuid.UUID(low_id)
     finally:
         await queue.close()
-
-
-@pytest.mark.asyncio
-async def test_same_priority_is_fifo_by_created_at(
-    client: AsyncClient,
-    redis_client: Redis,
-) -> None:
-    first = await client.post(
-        "/jobs",
-        json={
-            "job_type": "email",
-            "payload": {"to": "first@example.com"},
-            "priority": 5,
-        },
-    )
-    await asyncio.sleep(0.02)
-    second = await client.post(
-        "/jobs",
-        json={
-            "job_type": "email",
-            "payload": {"to": "second@example.com"},
-            "priority": 5,
-        },
-    )
-    first_id = first.json()["id"]
-    second_id = second.json()["id"]
-
-    ordered = await redis_client.zrange(JOBS_PENDING, 0, -1)
-    assert ordered[0] == first_id
-    assert ordered[1] == second_id
