@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from sqlalchemy import func, select, update
 
 from app.config import settings
 from app.db.models import Job, JobStatus
 from app.db.session import SessionLocal
 from app.logging_config import get_logger
+from app.worker.lifecycle import wait_or_stop
 
 logger = get_logger(__name__)
 
@@ -71,9 +70,11 @@ async def reap_expired_leases(*, limit: int = _REAPER_BATCH_SIZE) -> int:
     return reaped
 
 
-async def run_reaper_loop() -> None:
-    """Periodically reclaim jobs with expired processing leases."""
+async def run_reaper_loop(stop: asyncio.Event) -> None:
+    """Periodically reclaim jobs with expired processing leases until shutdown."""
     logger.info("reaper_started")
-    while True:
+    while not stop.is_set():
         await reap_expired_leases()
-        await asyncio.sleep(settings.reaper_poll_interval_seconds)
+        await wait_or_stop(stop, settings.reaper_poll_interval_seconds)
+
+    logger.info("reaper_stopped")

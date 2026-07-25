@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from sqlalchemy import func, or_, select
 
 from app.config import settings
@@ -12,6 +10,7 @@ from app.db.session import SessionLocal
 from app.logging_config import get_logger
 from app.queue.client import QueueClient
 from app.queue.keys import priority_score
+from app.worker.lifecycle import wait_or_stop
 
 logger = get_logger(__name__)
 
@@ -55,9 +54,11 @@ async def promote_ready_jobs(
     return promoted
 
 
-async def run_feeder_loop(queue: QueueClient) -> None:
-    """Periodically promote ready DB jobs into Redis."""
+async def run_feeder_loop(queue: QueueClient, stop: asyncio.Event) -> None:
+    """Periodically promote ready DB jobs into Redis until shutdown."""
     logger.info("feeder_started")
-    while True:
+    while not stop.is_set():
         await promote_ready_jobs(queue)
-        await asyncio.sleep(settings.scheduler_poll_interval_seconds)
+        await wait_or_stop(stop, settings.scheduler_poll_interval_seconds)
+        
+    logger.info("feeder_stopped")

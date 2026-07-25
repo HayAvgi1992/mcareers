@@ -21,6 +21,7 @@
 - Cursor (Grok) for Story 3.2 worker crash recovery (reaper)
 - Cursor (Grok) for Story 3.3 health endpoint + queue stats
 - Cursor (Grok) for Story 3.4 structured JSON logging
+- Cursor (Grok) for Story 3.5 graceful shutdown
 
 ## What Helped Most
 

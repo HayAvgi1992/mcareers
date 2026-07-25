@@ -456,11 +456,11 @@ mcareers/
 **So that** jobs aren't left mid-processing
 
 **Tasks**
-- [ ] SIGTERM handler; stop feeder/scheduler; drain executor
+- [x] SIGTERM handler; stop feeder/scheduler; drain executor
 
 **Acceptance criteria**
-- [ ] In-flight job completes before process exits
-- [ ] No new jobs picked up after shutdown signal
+- [x] In-flight job completes before process exits
+- [x] No new jobs picked up after shutdown signal
 
 ---
 

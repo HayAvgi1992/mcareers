@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from datetime import UTC, datetime
 from uuid import UUID
@@ -15,6 +14,7 @@ from app.db.session import SessionLocal
 from app.logging_config import get_logger
 from app.queue.client import QueueClient
 from app.queue.keys import priority_score
+from app.worker.lifecycle import wait_or_stop
 
 logger = get_logger(__name__)
 
@@ -84,12 +84,12 @@ async def promote_due_scheduled(
     return promoted
 
 
-async def run_scheduler_loop(queue: QueueClient) -> None:
+async def run_scheduler_loop(queue: QueueClient, stop: asyncio.Event) -> None:
     logger.info("scheduler_started")
 
     max_sleep = settings.scheduler_poll_interval_seconds
 
-    while True:
+    while not stop.is_set():
         await promote_due_scheduled(queue)
 
         next_score = await queue.next_scheduled_score()
@@ -100,4 +100,6 @@ async def run_scheduler_loop(queue: QueueClient) -> None:
             else min(max_sleep, next_score - time.time())
         )
 
-        await asyncio.sleep(max(MIN_SLEEP, target_sleep))
+        await wait_or_stop(stop, max(MIN_SLEEP, target_sleep))
+
+    logger.info("scheduler_stopped")

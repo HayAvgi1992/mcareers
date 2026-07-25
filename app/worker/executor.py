@@ -14,6 +14,7 @@ from app.jobs.registry import get_handler
 from app.logging_config import get_logger
 from app.queue.client import QueueClient
 from app.worker.claim import claim_job
+from app.worker.lifecycle import wait_or_stop
 from app.worker.retry import apply_failure
 
 logger = get_logger(__name__)
@@ -108,10 +109,17 @@ async def process_one(queue: QueueClient, worker_id: str) -> bool:
     return True
 
 
-async def run_executor_loop(queue: QueueClient, worker_id: str) -> None:
-    """Continuously drain the pending queue until cancelled."""
+async def run_executor_loop(
+    queue: QueueClient,
+    worker_id: str,
+    stop: asyncio.Event,
+) -> None:
+    """Continuously drain the pending queue until shutdown."""
     logger.info("executor_started", worker_id=worker_id)
-    while True:
-        processed = await process_one(queue, worker_id)
+    while not stop.is_set():
+        processed = await process_one(queue, worker_id, stop=stop)
+
         if not processed:
-            await asyncio.sleep(settings.executor_poll_interval_seconds)
+            await wait_or_stop(stop, settings.executor_poll_interval_seconds)
+            
+    logger.info("executor_stopped", worker_id=worker_id)

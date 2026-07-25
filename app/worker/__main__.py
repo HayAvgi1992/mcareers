@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal
 import socket
 import uuid
 
@@ -27,15 +28,29 @@ async def run() -> None:
     await check_db()
     queue = await QueueClient.connect()
     worker_id = _make_worker_id()
+    stop = asyncio.Event()
     logger.info("worker_connected", worker_id=worker_id)
+
+    loop = asyncio.get_running_loop() # get the current event loop
+
+    def _request_shutdown() -> None:
+        if not stop.is_set():
+            logger.info("shutdown_signal_received", worker_id=worker_id)
+            stop.set() # set the stop event to True
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, _request_shutdown)
+
     try:
         await asyncio.gather(
-            run_executor_loop(queue, worker_id),
-            run_feeder_loop(queue),
-            run_scheduler_loop(queue),
-            run_reaper_loop(),
+            run_executor_loop(queue, worker_id, stop),
+            run_feeder_loop(queue, stop),
+            run_scheduler_loop(queue, stop),
+            run_reaper_loop(stop),
         )
     finally:
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.remove_signal_handler(sig) # clean up the signal handler
         await queue.close()
         await dispose_engine()
         logger.info("worker_shutdown", worker_id=worker_id)
