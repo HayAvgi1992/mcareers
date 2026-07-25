@@ -14,5 +14,5 @@ COPY pytest.ini .
 
 EXPOSE 8000
 
-# Default is the API; compose overrides this for the worker.
+# Default is the API; compose overrides this for worker/maintenance.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

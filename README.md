@@ -8,20 +8,21 @@ Distributed background job processing system.
 cp .env.example .env
 docker compose up --build
 
-# Two (or more) worker replicas — Postgres claim prevents duplicate execution:
+# Scale executors only (keep a single maintenance replica):
 # docker compose up --build --scale worker=2
 ```
 
 Services:
 
-| Service  | Port | Notes                                      |
-|----------|------|--------------------------------------------|
-| api      | 8000 | FastAPI (`GET /` → `{"status":"ok"}`)      |
-| worker   | —    | Background worker (`--scale worker=2` for replicas) |
-| postgres | 5432 | DB `mcareers`; schema applied on first boot |
-| redis    | 6379 | Dispatch queue                             |
+| Service      | Port | Notes                                      |
+|--------------|------|--------------------------------------------|
+| api          | 8000 | FastAPI (`GET /` → `{"status":"ok"}`)      |
+| worker       | —    | Job executor only (`--scale worker=2` OK)  |
+| maintenance  | —    | Feeder + scheduler + reaper (one replica)  |
+| postgres     | 5432 | DB `mcareers`; schema applied on first boot |
+| redis        | 6379 | Dispatch queue                             |
 
-`api` and `worker` load env from `.env` (docker-compose hostnames). For host-local processes, point `DATABASE_URL` / `REDIS_URL` at `localhost` instead.
+`api`, `worker`, and `maintenance` load env from `.env` (docker-compose hostnames). For host-local processes, point `DATABASE_URL` / `REDIS_URL` at `localhost` instead.
 
 ## How to run tests
 
@@ -98,6 +99,8 @@ docker compose exec redis redis-cli ZRANGE jobs:pending 0 -1 WITHSCORES
 Your job UUID should appear in `jobs:pending`.
 
 ### Multiple workers (no duplicate execution)
+
+Scale **workers** only; leave **maintenance** at one replica (it owns feeder/scheduler/reaper):
 
 ```bash
 docker compose up --build --scale worker=2

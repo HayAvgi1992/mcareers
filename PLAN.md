@@ -49,12 +49,17 @@ mcareers/
 │   │   └── idempotency.py       # Duplicate-key lookup + 24h cleanup helper
 │   │
 │   ├── worker/
-│   │   ├── __main__.py          # Worker process entrypoint (`python -m app.worker`)
+│   │   ├── __main__.py          # Executor process (`python -m app.worker`, scalable)
 │   │   ├── feeder.py            # Poll DB → promote ready pending jobs to Redis
 │   │   ├── claim.py             # Atomic DB claim (pending → processing + lease)
 │   │   ├── executor.py          # Pop Redis → claim → run handler → finalize
 │   │   ├── retry.py             # Backoff calculation + failure state updates
-│   │   └── reaper.py            # Recover expired leases (should-have)
+│   │   ├── scheduler.py         # Promote due scheduled jobs → pending
+│   │   ├── reaper.py            # Recover expired leases
+│   │   └── lifecycle.py         # Graceful stop helpers
+│   │
+│   ├── maintenance/
+│   │   └── __main__.py          # Feeder + scheduler + reaper (`python -m app.maintenance`)
 │   │
 │   └── jobs/
 │       ├── base.py              # JobHandler protocol / base class

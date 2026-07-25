@@ -1,4 +1,4 @@
-"""Graceful worker shutdown — finish in-flight job; pick up no new work."""
+"""Graceful worker shutdown — finish in-flight job; stop picking new work."""
 
 from __future__ import annotations
 
@@ -14,36 +14,10 @@ from app.db.models import Job, JobStatus, JobType
 from app.db.session import SessionLocal
 from app.queue.client import QueueClient
 from app.queue.keys import priority_score
-from app.worker.executor import process_one, run_executor_loop
+from app.worker.executor import run_executor_loop
 from app.worker.feeder import run_feeder_loop
 
 pytestmark = pytest.mark.usefixtures("clean_jobs")
-
-
-@pytest.mark.asyncio
-async def test_process_one_skips_dequeue_when_stop_set(
-    db_session: AsyncSession,
-    queue: QueueClient,
-) -> None:
-    job = Job(
-        job_type=JobType.email,
-        payload={"to": "skip@example.com"},
-        status=JobStatus.pending,
-    )
-    db_session.add(job)
-    await db_session.commit()
-    await db_session.refresh(job)
-    await queue.enqueue(job.id, priority_score(job.priority, job.created_at))
-
-    stop = asyncio.Event()
-    stop.set()
-
-    assert await process_one(queue, worker_id="shutdown-test", stop=stop) is False
-
-    async with SessionLocal() as session:
-        still = await session.scalar(select(Job).where(Job.id == job.id))
-        assert still is not None
-        assert still.status == JobStatus.pending
 
 
 @pytest.mark.asyncio

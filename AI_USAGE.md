@@ -23,6 +23,7 @@
 - Cursor (Grok) for Story 3.4 structured JSON logging
 - Cursor (Grok) for Story 3.5 graceful shutdown
 - Cursor (Grok) for Story 4.1 multiple concurrent workers
+- Cursor (Grok) for splitting maintenance (feeder/scheduler/reaper) from worker
 
 ## What Helped Most
 
