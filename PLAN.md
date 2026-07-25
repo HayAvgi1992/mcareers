@@ -468,7 +468,8 @@ mcareers/
 
 ### Story 4.1: Multiple concurrent workers
 
-Run 2+ worker containers; verify no duplicate execution.
+- [x] Run 2+ worker containers (`docker compose up --scale worker=2`)
+- [x] Verify no duplicate execution (claim race + concurrent `process_one` tests)
 
 ### Story 4.2: Batch job progress tracking
 

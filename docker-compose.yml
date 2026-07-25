@@ -39,6 +39,8 @@ services:
       redis:
         condition: service_healthy
 
+  # Scale with: docker compose up --build --scale worker=2
+  # Each replica gets a unique worker_id; Postgres claim prevents duplicate execution.
   worker:
     build: .
     command: python -m app.worker

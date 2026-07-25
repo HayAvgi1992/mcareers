@@ -7,6 +7,9 @@ Distributed background job processing system.
 ```bash
 cp .env.example .env
 docker compose up --build
+
+# Two (or more) worker replicas — Postgres claim prevents duplicate execution:
+# docker compose up --build --scale worker=2
 ```
 
 Services:
@@ -14,7 +17,7 @@ Services:
 | Service  | Port | Notes                                      |
 |----------|------|--------------------------------------------|
 | api      | 8000 | FastAPI (`GET /` → `{"status":"ok"}`)      |
-| worker   | —    | Background worker process                  |
+| worker   | —    | Background worker (`--scale worker=2` for replicas) |
 | postgres | 5432 | DB `mcareers`; schema applied on first boot |
 | redis    | 6379 | Dispatch queue                             |
 
@@ -93,5 +96,38 @@ docker compose exec redis redis-cli ZRANGE jobs:pending 0 -1 WITHSCORES
 ```
 
 Your job UUID should appear in `jobs:pending`.
+
+### Multiple workers (no duplicate execution)
+
+```bash
+docker compose up --build --scale worker=2
+```
+
+Submit a burst of jobs:
+
+```bash
+for i in $(seq 1 10); do
+  curl -s -X POST http://localhost:8000/jobs \
+    -H 'Content-Type: application/json' \
+    -d "{\"job_type\":\"email\",\"payload\":{\"to\":\"u$i@example.com\"}}" >/dev/null
+done
+```
+
+Check that distinct `worker_id`s appear and each job is claimed once:
+
+```bash
+docker compose logs worker | grep job_claimed
+```
+
+```bash
+docker compose exec postgres \
+  psql -U postgres -d mcareers \
+  -c "SELECT id, status, attempt_count, worker_id
+      FROM jobs
+      WHERE created_at > now() - interval '5 minutes'
+      ORDER BY created_at DESC;"
+```
+
+Expect each job `completed` with `attempt_count = 1` (successful path).
 
 ## Brief architecture overview
