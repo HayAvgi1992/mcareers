@@ -117,7 +117,7 @@ async def run_executor_loop(
     """Continuously drain the pending queue until shutdown."""
     logger.info("executor_started", worker_id=worker_id)
     while not stop.is_set():
-        processed = await process_one(queue, worker_id, stop=stop)
+        processed = await process_one(queue, worker_id)
 
         if not processed:
             await wait_or_stop(stop, settings.executor_poll_interval_seconds)
