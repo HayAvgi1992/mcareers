@@ -73,7 +73,10 @@ async def process_one(queue: QueueClient, worker_id: str) -> bool:
 
         try:
             handler = get_handler(job.job_type)
-            result = await handler.run(job)
+            result = await asyncio.wait_for(
+                handler.run(job),
+                timeout=settings.job_timeout_seconds,
+            )
             await _complete_job(session, job, result)
             logger.info(
                 "job_completed",
@@ -81,6 +84,17 @@ async def process_one(queue: QueueClient, worker_id: str) -> bool:
                 job_type=job.job_type.value,
                 status=JobStatus.completed.value,
             )
+        except TimeoutError:
+            err = f"timed out after {settings.job_timeout_seconds:g}s"
+            logger.warning(
+                "job_timed_out",
+                job_id=str(job.id),
+                job_type=job.job_type.value,
+                status=job.status.value,
+                timeout_seconds=settings.job_timeout_seconds,
+                error_message=err,
+            )
+            await apply_failure(session, job, err)
         except UnknownJobTypeError as exc:
             # Unknown type will not succeed on retry — fail permanently.
             await apply_failure(

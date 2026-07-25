@@ -55,6 +55,7 @@ logger.info("job_claimed", job_id=str(job.id), job_type=job.job_type, status=job
 | `job_started` | info | Handler execution begins |
 | `job_completed` | info | Success; result stored |
 | `job_failed` | warning/error | Handler error or permanent failure |
+| `job_timed_out` | warning | Handler exceeded `JOB_TIMEOUT_SECONDS`; then retry or fail |
 | `job_retry_scheduled` | info | Failure with retries remaining; log `next_run_at`, `attempt_count` |
 | `job_cancelled` | info | Cancelled via API |
 | `job_manual_retry` | info | Manual retry triggered |

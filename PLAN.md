@@ -484,6 +484,15 @@ Update `progress_pct` during batch processing; expose via GET.
 
 Mark job failed if processing exceeds configured timeout.
 
+**Tasks**
+- [x] `JOB_TIMEOUT_SECONDS` setting (default 30; keep below lease)
+- [x] Executor wraps `handler.run` with `asyncio.wait_for`
+- [x] Timeout → `job_timed_out` log + normal DB retry / permanent fail path
+
+**Acceptance criteria**
+- [x] Handler overrun schedules retry (or permanent `failed` at max attempts)
+- [x] Handlers under the limit still complete
+
 ### Story 4.4: Dead letter queue
 
 Move permanently failed jobs to a separate Redis list / DB flag for inspection.
@@ -494,18 +503,18 @@ Move permanently failed jobs to a separate Redis list / DB flag for inspection.
 
 ### Story 5.1: README
 
-- [ ] How to run (`docker-compose up`)
-- [ ] How to run tests
-- [ ] Example curl for job submission
-- [ ] Brief architecture overview
+- [x] How to run (`docker-compose up`)
+- [x] How to run tests
+- [x] Example curl for job submission
+- [x] Brief architecture overview
 
 ### Story 5.2: DECISIONS.md
 
-- [ ] Complete all sections including §5 honest trade-off
+- [x] Complete all sections including §5 honest trade-off
 
 ### Story 5.3: AI_USAGE.md
 
-- [ ] Tools used, what helped, what AI got wrong
+- [x] Tools used, what helped, what AI got wrong
 
 ---
 
@@ -542,4 +551,4 @@ Move permanently failed jobs to a separate Redis list / DB flag for inspection.
 - [x] `docker-compose up` runs API + worker + postgres + redis
 - [x] 6 test files pass
 - [x] DECISIONS.md §1, §3, §4 filled
-- [ ] README sections drafted (can finalize in Phase 5)
+- [x] README sections drafted (can finalize in Phase 5)

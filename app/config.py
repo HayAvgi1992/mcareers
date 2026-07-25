@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # How long a worker holds a processing lease before a reaper may reclaim it.
     worker_lease_seconds: int = 60
 
+    # Max seconds a handler may run before the attempt is failed (retry/fail via DB).
+    # Keep below worker_lease_seconds so the worker can finalize before the reaper.
+    job_timeout_seconds: float = 30.0
+
     # How often the reaper scans for expired leases.
     reaper_poll_interval_seconds: float = 5.0
 

@@ -36,7 +36,7 @@ Score formula: `(-priority * 10^12) + created_at_epoch_ms` — higher priority f
 
 **Approach chosen:** DB-driven retry scheduling (Option B). The worker does not re-enqueue to Redis on failure.
 
-On failure the worker only updates Postgres: increment `attempt_count`, set `next_run_at` to the backoff delay, keep `status = 'pending'`. A feeder loop in the main worker process polls Postgres for ready jobs (`status = 'pending' AND (next_run_at IS NULL OR next_run_at <= now())`) and enqueues them to Redis. This keeps failure handling out of the execution path and centralizes queue promotion in one place.
+On failure the worker only updates Postgres: increment `attempt_count`, set `next_run_at` to the backoff delay, keep `status = 'pending'`. A feeder loop in the **maintenance** process polls Postgres for ready jobs (`status = 'pending' AND (next_run_at IS NULL OR next_run_at <= now())`) and enqueues them to Redis. This keeps failure handling out of the execution path and centralizes queue promotion in one place.
 
 Manual retry (`POST /jobs/{id}/retry`): increment `max_attempts`, set `status = 'pending'`, `next_run_at = now()`. The feeder picks it up on the next cycle.
 
@@ -50,4 +50,8 @@ Manual retry (`POST /jobs/{id}/retry`): increment `max_attempts`, set `status = 
 
 ## 5. One Thing I Would Do Differently With More Time
 
-[Be honest — what did you skip or simplify?]
+**Separate maintenance from day one.** Early on, feeder / scheduler / reaper ran inside the same process as the executor. That worked until we scaled workers with Compose — every replica also ran housekeeping, which is wasteful and races. Splitting into `python -m app.worker` (executor) and `python -m app.maintenance` (one replica) fixed it, but the cut was late. I would have drawn that boundary in the initial architecture instead of retrofitting it.
+
+**Keep handler progress boring.** Mid-run batch `progress_pct` was built with a `HandlerSpec` + progress-callback layer, then deleted as too much machinery for the value. Completion still sets `progress_pct = 100`. With more time I would either skip progress until a real consumer needs it, or pass a single optional `report(pct)` callable into `run` — nothing registry-shaped.
+
+**Timeout vs lease:** Handler runtime is capped by `JOB_TIMEOUT_SECONDS` (`asyncio.wait_for` in the executor). A timeout fails the attempt through the normal retry path (`apply_failure`). Keep timeout below `WORKER_LEASE_SECONDS` so the worker can finalize DB state before the reaper assumes a crash. Lease/reaper still covers true worker death.

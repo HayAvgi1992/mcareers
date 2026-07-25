@@ -1,44 +1,61 @@
 # mcareers
 
-Distributed background job processing system.
+Distributed background job processing system (Python / FastAPI / PostgreSQL / Redis).
 
-## How to run the project
+Postgres is the **source of truth** for job state. Redis is a **dispatch** layer (`jobs:pending` / `jobs:scheduled` ZSETs). Workers pop from Redis, then atomically claim in Postgres so only one executor runs each job.
+
+## Prerequisites
+
+- Docker + Docker Compose
+- (Optional, for host tests) Python 3.11+, local Postgres + Redis on `localhost`
+
+## How to run
 
 ```bash
 cp .env.example .env
 docker compose up --build
-
-# Scale executors only (keep a single maintenance replica):
-# docker compose up --build --scale worker=2
 ```
 
-Services:
+| Service       | Port | Role |
+|---------------|------|------|
+| `api`         | 8000 | FastAPI HTTP API |
+| `worker`      | —    | Job executor only (safe to scale) |
+| `maintenance` | —    | Feeder + scheduler + reaper (keep **one** replica) |
+| `postgres`    | 5432 | Job state / results |
+| `redis`       | 6379 | Priority dispatch queues |
 
-| Service      | Port | Notes                                      |
-|--------------|------|--------------------------------------------|
-| api          | 8000 | FastAPI (`GET /` → `{"status":"ok"}`)      |
-| worker       | —    | Job executor only (`--scale worker=2` OK)  |
-| maintenance  | —    | Feeder + scheduler + reaper (one replica)  |
-| postgres     | 5432 | DB `mcareers`; schema applied on first boot |
-| redis        | 6379 | Dispatch queue                             |
+`api`, `worker`, and `maintenance` load env from `.env` (docker-compose hostnames).
+Scale executors (do **not** scale `maintenance`):
 
-`api`, `worker`, and `maintenance` load env from `.env` (docker-compose hostnames). For host-local processes, point `DATABASE_URL` / `REDIS_URL` at `localhost` instead.
+```bash
+docker compose up --build --scale worker=2
+```
+
+Stop:
+
+```bash
+docker compose down
+```
 
 ## How to run tests
 
-```bash
-# Inside the running stack (uses compose service hostnames):
-docker compose exec api python -m pytest -q
+With the stack running (uses compose service hostnames inside the container):
 
-# Or on the host (Postgres + Redis on localhost):
+```bash
+docker compose exec api python -m pytest -q
+```
+
+On the host (Postgres + Redis on `127.0.0.1`; tests use Redis DB **15** so they do not collide with a live worker on DB 0):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/mcareers
 pytest -q
 ```
 
-## Manual smoke test (submit → DB → API)
-
-With the stack running (`docker compose up --build`):
-
-### 1. Submit a job
+## Example: submit a job
 
 ```bash
 curl -s -X POST http://localhost:8000/jobs \
@@ -46,29 +63,37 @@ curl -s -X POST http://localhost:8000/jobs \
   -d '{"job_type":"email","payload":{"to":"user@example.com"},"priority":1}' | jq
 ```
 
-Copy the `id` from the response.
-
-### 2. Read it via API
+Poll status / result:
 
 ```bash
-curl -s http://localhost:8000/jobs/<JOB_ID> | jq
+curl -s http://localhost:8000/jobs/<JOB_ID> | jq '.status, .result, .progress_pct'
 ```
 
-Expect `status: "completed"` within ~1s for `email` jobs (worker executor is running). Poll with:
+Idempotent submit (duplicate key → `200` with `{id, status}` only):
 
 ```bash
-curl -s http://localhost:8000/jobs/<JOB_ID> | jq '.status, .result'
+curl -s -X POST http://localhost:8000/jobs \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: my-client-key-1' \
+  -d '{"job_type":"email","payload":{"to":"user@example.com"}}' | jq
 ```
 
-### List jobs (filters + pagination)
+Other useful endpoints:
 
 ```bash
-curl -s 'http://localhost:8000/jobs?status=pending&job_type=email&limit=20&offset=0' | jq
-```
+# List
+curl -s 'http://localhost:8000/jobs?status=pending&limit=20' | jq
 
-### Schedule a job for later
+# Cancel (pending or scheduled)
+curl -s -X POST http://localhost:8000/jobs/<JOB_ID>/cancel | jq
 
-```bash
+# Manual retry (failed only)
+curl -s -X POST http://localhost:8000/jobs/<JOB_ID>/retry | jq
+
+# Health + queue stats
+curl -s http://localhost:8000/health | jq
+
+# Schedule for later
 curl -s -X POST http://localhost:8000/jobs \
   -H 'Content-Type: application/json' \
   -d "{\"job_type\":\"email\",\"payload\":{\"to\":\"later@example.com\"},\"scheduled_at\":\"$(date -u -d '+2 minutes' +%Y-%m-%dT%H:%M:%SZ)\"}" | jq
@@ -76,21 +101,15 @@ curl -s -X POST http://localhost:8000/jobs \
 
 Expect `status: "scheduled"`. The worker scheduler promotes it to `pending` when due (~1s latency).
 
+Job types: `email`, `webhook`, `report`, `batch`.
+
 ### Health check
 
 ```bash
 curl -s http://localhost:8000/health | jq
 ```
 
-### 3. Check Postgres
-
-```bash
-docker compose exec postgres \
-  psql -U postgres -d mcareers \
-  -c "SELECT id, job_type, status, priority, payload, created_at FROM jobs ORDER BY created_at DESC LIMIT 5;"
-```
-
-### 4. Check Redis queue (optional)
+### Check Redis queue (optional)
 
 ```bash
 docker compose exec redis redis-cli ZRANGE jobs:pending 0 -1 WITHSCORES
@@ -134,3 +153,37 @@ docker compose exec postgres \
 Expect each job `completed` with `attempt_count = 1` (successful path).
 
 ## Brief architecture overview
+
+```
+Client → API (FastAPI)
+           │
+           ├─ write job row (Postgres)
+           └─ ZADD jobs:pending or jobs:scheduled (Redis)
+
+maintenance
+  ├─ scheduler: due scheduled → pending + enqueue
+  ├─ feeder:    ready pending rows → Redis (NX)
+  └─ reaper:    expired processing leases → pending
+
+worker (N replicas)
+  └─ ZPOPMIN → DB claim (pending→processing) → handler (≤ JOB_TIMEOUT_SECONDS) → complete/fail
+```
+
+**Invariants**
+
+- Postgres wins if Redis and DB disagree (stale Redis entries are dropped on failed claim).
+- Workers do **not** re-enqueue on failure; they set `next_run_at` and the feeder promotes later.
+- Priority score in Redis: `(-priority * 10^12) + created_at_epoch_ms` (higher priority first; FIFO within the same priority).
+- Retry backoff: attempt 1 immediate · 2 → 30s · 3 → 2min · then permanent `failed`.
+- Handler timeout (`JOB_TIMEOUT_SECONDS`, default 30) fails the attempt via the same retry path; keep it below `WORKER_LEASE_SECONDS`.
+
+More detail: [DECISIONS.md](./DECISIONS.md). Session conventions: [SESSION_RULES.md](./SESSION_RULES.md).
+
+## Project docs
+
+| File | Purpose |
+|------|---------|
+| [PLAN.md](./PLAN.md) | Build stories / checklist |
+| [DECISIONS.md](./DECISIONS.md) | Architecture trade-offs |
+| [AI_USAGE.md](./AI_USAGE.md) | AI tooling notes |
+| [app/db/schema.sql](./app/db/schema.sql) | Postgres schema |
