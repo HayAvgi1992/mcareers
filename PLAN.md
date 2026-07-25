@@ -141,13 +141,13 @@ mcareers/
 **So that** I can run the project without manual setup
 
 **Tasks**
-- [x] `docker-compose.yml`: postgres, redis, api, worker
+- [x] `docker-compose.yml`: postgres, redis, api, worker, maintence
 - [x] `Dockerfile`: multi-stage or single image for api + worker (different commands)
 - [x] Postgres init: run `schema.sql` on first boot
 - [x] Healthchecks on postgres + redis
 
 **Acceptance criteria**
-- [x] `docker-compose up` starts 4 services
+- [x] `docker-compose up` starts 5 services
 - [x] API responds on documented port
 - [x] Tables exist in Postgres after startup
 
