@@ -6,14 +6,12 @@ import asyncio
 import uuid
 from typing import Any
 
+from app.config import settings
 from app.db.models import Job
-
-# Simulated send latency (keep short enough for local demos).
-_SLEEP_SECONDS = 0.5
 
 
 async def run(job: Job) -> dict[str, Any]:
-    await asyncio.sleep(_SLEEP_SECONDS)
+    await asyncio.sleep(settings.email_mock_sleep_seconds)
     to = job.payload.get("to", "unknown")
     return {
         "status": "sent",

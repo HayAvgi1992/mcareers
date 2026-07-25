@@ -24,8 +24,8 @@ pytestmark = pytest.mark.usefixtures("clean_jobs")
 
 
 def test_backoff_schedule() -> None:
-    assert backoff_seconds(1) == 30
-    assert backoff_seconds(2) == 120
+    assert backoff_seconds(1) == 30.0
+    assert backoff_seconds(2) == 120.0
     assert should_retry(1, 3) is True
     assert should_retry(3, 3) is False
 

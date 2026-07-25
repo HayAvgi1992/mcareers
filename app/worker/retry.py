@@ -6,23 +6,24 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.models import Job, JobStatus
 from app.logging_config import get_logger
 from app.queue.client import QueueClient
 
 logger = get_logger(__name__)
 
-# After attempt N fails, wait this many seconds before attempt N+1.
-# Attempt 1 is immediate on submit (next_run_at NULL) — DECISIONS.md §4.
-_BACKOFF_SECONDS_AFTER_ATTEMPT = {
-    1: 30,
-    2: 120,
-}
 
-
-def backoff_seconds(attempt_count: int) -> int:
-    """Seconds to wait after a failed attempt before the next run."""
-    return _BACKOFF_SECONDS_AFTER_ATTEMPT.get(attempt_count, 120)
+def backoff_seconds(attempt_count: int) -> float:
+    """
+    Seconds to wait after a failed attempt before the next run.
+    Attempt 1 is immediate on submit (next_run_at NULL) — DECISIONS.md §4.
+    """
+    if attempt_count == 1:
+        return settings.retry_backoff_after_attempt_1_seconds
+    if attempt_count == 2:
+        return settings.retry_backoff_after_attempt_2_seconds
+    return settings.retry_backoff_after_attempt_2_seconds
 
 
 def should_retry(attempt_count: int, max_attempts: int) -> bool:

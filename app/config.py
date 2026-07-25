@@ -31,11 +31,21 @@ class Settings(BaseSettings):
     # Idle sleep when the Redis pending queue is empty.
     executor_poll_interval_seconds: float = 0.5
 
-    # Scheduler poll interval when promoting ready pending jobs to Redis.
+    # Scheduler / feeder poll interval.
     scheduler_poll_interval_seconds: float = 1.0
 
     # Default max attempts for new jobs (matches schema default).
     default_max_attempts: int = 3
+
+    # Retry backoff after attempt N fails (before attempt N+1). Spec defaults.
+    retry_backoff_after_attempt_1_seconds: float = 30.0
+    retry_backoff_after_attempt_2_seconds: float = 120.0
+
+    # Mock handler latencies (tune for demos / manual Phase 4 testing).
+    email_mock_sleep_seconds: float = 0.5
+    webhook_mock_sleep_seconds: float = 0.3
+    report_mock_sleep_seconds: float = 1.0
+    batch_item_sleep_seconds: float = 0.05
 
 
 @lru_cache

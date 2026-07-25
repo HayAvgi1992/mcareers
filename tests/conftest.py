@@ -19,6 +19,17 @@ os.environ.setdefault(
     "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/mcareers",
 )
 
+# Pin timing knobs to DECISIONS.md defaults so a local demo .env cannot
+# change backoff / mock sleeps under pytest.
+os.environ["RETRY_BACKOFF_AFTER_ATTEMPT_1_SECONDS"] = "30"
+os.environ["RETRY_BACKOFF_AFTER_ATTEMPT_2_SECONDS"] = "120"
+os.environ["JOB_TIMEOUT_SECONDS"] = "30"
+os.environ["EMAIL_MOCK_SLEEP_SECONDS"] = "0.5"
+os.environ["WEBHOOK_MOCK_SLEEP_SECONDS"] = "0.3"
+os.environ["REPORT_MOCK_SLEEP_SECONDS"] = "1.0"
+os.environ["BATCH_ITEM_SLEEP_SECONDS"] = "0.05"
+os.environ["DEFAULT_MAX_ATTEMPTS"] = "3"
+
 # Tests dequeue from DB 15; worker on DB 0 cannot steal test queue entries.
 _redis = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
 _redis = re.sub(r"/\d+$", "", _redis.rstrip("/"))

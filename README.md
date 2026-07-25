@@ -25,6 +25,9 @@ docker compose up --build
 | `redis`       | 6379 | Priority dispatch queues |
 
 `api`, `worker`, and `maintenance` load env from `.env` (docker-compose hostnames).
+
+**Phase 4 demo timings:** the checked-in `.env` uses short backoffs / mock sleeps so you can exercise timeout, progress, and DLQ quickly (`report` sleeps 8s with a 5s timeout; batch items sleep 0.4s). Spec defaults are in `.env.example`. After changing `.env`, recreate: `docker compose up -d --scale worker=2 --force-recreate`.
+
 Scale executors (do **not** scale `maintenance`):
 
 ```bash

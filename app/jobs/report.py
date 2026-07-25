@@ -6,13 +6,12 @@ import asyncio
 import uuid
 from typing import Any
 
+from app.config import settings
 from app.db.models import Job
-
-_SLEEP_SECONDS = 1.0
 
 
 async def run(job: Job) -> dict[str, Any]:
-    await asyncio.sleep(_SLEEP_SECONDS)
+    await asyncio.sleep(settings.report_mock_sleep_seconds)
     name = job.payload.get("name", "report")
     return {
         "status": "ready",

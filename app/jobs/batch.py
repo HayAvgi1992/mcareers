@@ -5,10 +5,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from app.config import settings
 from app.db.models import Job
 from app.jobs.base import ProgressReporter
-
-_ITEM_SLEEP_SECONDS = 0.05
 
 
 async def run(
@@ -26,7 +25,7 @@ async def run(
         return {"status": "processed", "processed": 0, "failed": 0}
 
     for i, _item in enumerate(items):
-        await asyncio.sleep(_ITEM_SLEEP_SECONDS)
+        await asyncio.sleep(settings.batch_item_sleep_seconds)
         if report is not None:
             await report(int((i + 1) * 100 / total))
 

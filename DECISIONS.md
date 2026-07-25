@@ -40,10 +40,10 @@ On failure the worker only updates Postgres: increment `attempt_count`, set `nex
 
 Manual retry (`POST /jobs/{id}/retry`): increment `max_attempts`, set `status = 'pending'`, `next_run_at = now()`. The feeder picks it up on the next cycle.
 
-**Timing:**
+**Timing (defaults; overridable via env):**
 - Attempt 1: immediate (`next_run_at = NULL`)
-- Attempt 2: 30 seconds after failure
-- Attempt 3: 2 minutes after failure
+- Attempt 2: `RETRY_BACKOFF_AFTER_ATTEMPT_1_SECONDS` (default 30s) after failure
+- Attempt 3: `RETRY_BACKOFF_AFTER_ATTEMPT_2_SECONDS` (default 120s) after failure
 - After `attempt_count >= max_attempts`: `status = 'failed'` permanently
 
 ---
