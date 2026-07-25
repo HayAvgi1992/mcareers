@@ -55,6 +55,7 @@ logger.info("job_claimed", job_id=str(job.id), job_type=job.job_type, status=job
 | `job_started` | info | Handler execution begins |
 | `job_completed` | info | Success; result stored |
 | `job_failed` | warning/error | Handler error or permanent failure |
+| `job_dead_lettered` | info | Permanently failed job indexed in Redis `jobs:dead_letter` |
 | `job_timed_out` | warning | Handler exceeded `JOB_TIMEOUT_SECONDS`; then retry or fail |
 | `job_retry_scheduled` | info | Failure with retries remaining; log `next_run_at`, `attempt_count` |
 | `job_cancelled` | info | Cancelled via API |
@@ -172,7 +173,7 @@ Before ending the session, confirm:
 - Don't commit unless explicitly asked.
 - Don't push to remote unless explicitly asked.
 - Don't implement should-haves during must-have stories.
-- Don't have the worker push to Redis on failure (feeder only).
+- Don't have the worker re-enqueue to `jobs:pending` on failure (feeder only). DLQ `jobs:dead_letter` LPUSH on permanent fail is allowed (inspection, not dispatch).
 - Don't use Kafka or DB-only dequeue — stack is Postgres + Redis per `DECISIONS.md`.
 - Don't process jobs inside API request handlers.
 - Don't skip tests for "simple" features.

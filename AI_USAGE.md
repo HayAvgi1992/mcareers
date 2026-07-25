@@ -26,6 +26,7 @@
 - Cursor (Grok) for splitting maintenance (feeder/scheduler/reaper) from worker
 - Cursor (Grok) for Story 4.2 batch progress (implemented, then deferred/removed)
 - Cursor (Grok) for Story 4.3 job timeout enforcement
+- Cursor (Grok) for Story 4.4 dead letter queue
 - Cursor (Grok) for Story 5.1 README polish
 - Cursor (Grok) for Story 5.2 DECISIONS.md §5 + stale-section fixes
 - Cursor (Grok) for Story 5.3 AI_USAGE.md polish

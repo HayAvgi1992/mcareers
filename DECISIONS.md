@@ -55,3 +55,5 @@ Manual retry (`POST /jobs/{id}/retry`): increment `max_attempts`, set `status = 
 **Keep handler progress boring.** Mid-run batch `progress_pct` was built with a `HandlerSpec` + progress-callback layer, then deleted as too much machinery for the value. Completion still sets `progress_pct = 100`. With more time I would either skip progress until a real consumer needs it, or pass a single optional `report(pct)` callable into `run` — nothing registry-shaped.
 
 **Timeout vs lease:** Handler runtime is capped by `JOB_TIMEOUT_SECONDS` (`asyncio.wait_for` in the executor). A timeout fails the attempt through the normal retry path (`apply_failure`). Keep timeout below `WORKER_LEASE_SECONDS` so the worker can finalize DB state before the reaper assumes a crash. Lease/reaper still covers true worker death.
+
+**Dead letter (Story 4.4):** Postgres `status=failed` is the source of truth. On permanent failure the worker also LPUSHes the job id onto Redis LIST `jobs:dead_letter` (trimmed to 1000) for quick inspection — this is not a dispatch queue and does not re-enqueue work. Manual retry removes the id from the list; the feeder still promotes from Postgres.

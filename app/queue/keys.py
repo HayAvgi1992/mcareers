@@ -10,6 +10,12 @@ JOBS_PENDING = "jobs:pending"
 # Future jobs (should-have Story 3.1). Score = run_at epoch.
 JOBS_SCHEDULED = "jobs:scheduled"
 
+# Inspection LIST of permanently failed job IDs (newest first). Not for dispatch.
+JOBS_DEAD_LETTER = "jobs:dead_letter"
+
+# Cap Redis DLQ growth; Postgres status=failed remains source of truth.
+DEAD_LETTER_MAX_LEN = 1000
+
 # Higher priority first; FIFO within same priority (DECISIONS.md §3).
 _PRIORITY_SCALE = 10**12 # high number to ensure the priority is respected
 

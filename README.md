@@ -176,6 +176,7 @@ worker (N replicas)
 - Priority score in Redis: `(-priority * 10^12) + created_at_epoch_ms` (higher priority first; FIFO within the same priority).
 - Retry backoff: attempt 1 immediate · 2 → 30s · 3 → 2min · then permanent `failed`.
 - Handler timeout (`JOB_TIMEOUT_SECONDS`, default 30) fails the attempt via the same retry path; keep it below `WORKER_LEASE_SECONDS`.
+- Permanent failures: Postgres `status=failed` + Redis LIST `jobs:dead_letter` (inspection only; not dispatched). List failed jobs with `GET /jobs?status=failed`.
 
 More detail: [DECISIONS.md](./DECISIONS.md). Session conventions: [SESSION_RULES.md](./SESSION_RULES.md).
 

@@ -32,6 +32,7 @@ async def test_health_ok_with_stats(client: AsyncClient) -> None:
     assert body["jobs"]["failed"] == 0
     assert body["queue"]["pending_depth"] == 2
     assert body["queue"]["scheduled_depth"] == 0
+    assert body["queue"]["dead_letter_depth"] == 0
 
 
 @pytest.mark.asyncio

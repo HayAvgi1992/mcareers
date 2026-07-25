@@ -1,4 +1,4 @@
-"""Retry scheduling: DB-only backoff (worker never re-enqueues to Redis)."""
+"""Retry scheduling: DB-driven backoff (worker never re-enqueues to pending)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Job, JobStatus
 from app.logging_config import get_logger
+from app.queue.client import QueueClient
 
 logger = get_logger(__name__)
 
@@ -33,12 +34,15 @@ async def apply_failure(
     job: Job,
     error_message: str,
     *,
+    queue: QueueClient | None = None,
     now: datetime | None = None,
     permanent: bool = False,
 ) -> None:
     """
     Record a handler failure. Either schedule a DB-driven retry (pending +
-    next_run_at) or mark permanently failed. Does not touch Redis.
+    next_run_at) or mark permanently failed. Does not re-enqueue to pending.
+    When permanently failed and ``queue`` is provided, indexes the job in the
+    Redis dead-letter list for inspection.
     """
     now = now or datetime.now(UTC)
     job.error_message = error_message
@@ -68,6 +72,17 @@ async def apply_failure(
     await session.commit()
     logger.warning(
         "job_failed",
+        job_id=str(job.id),
+        job_type=job.job_type.value,
+        status=job.status.value,
+        attempt_count=job.attempt_count,
+        error_message=error_message,
+    )
+    if queue is None:
+        return
+    await queue.dead_letter(job.id)
+    logger.info(
+        "job_dead_lettered",
         job_id=str(job.id),
         job_type=job.job_type.value,
         status=job.status.value,

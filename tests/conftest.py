@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionLocal, engine
 from app.main import app, shutdown, startup
 from app.queue.client import QueueClient
-from app.queue.keys import JOBS_PENDING, JOBS_SCHEDULED
+from app.queue.keys import JOBS_DEAD_LETTER, JOBS_PENDING, JOBS_SCHEDULED
 from app.worker.executor import process_one
 
 
@@ -104,8 +104,8 @@ async def clean_jobs(redis_client: Redis) -> AsyncIterator[None]:
     """Clear jobs table and Redis dispatch ZSETs around a test."""
     async with engine.begin() as conn:
         await conn.execute(text("TRUNCATE job_logs, jobs CASCADE"))
-    await redis_client.delete(JOBS_PENDING, JOBS_SCHEDULED)
+    await redis_client.delete(JOBS_PENDING, JOBS_SCHEDULED, JOBS_DEAD_LETTER)
     yield
     async with engine.begin() as conn:
         await conn.execute(text("TRUNCATE job_logs, jobs CASCADE"))
-    await redis_client.delete(JOBS_PENDING, JOBS_SCHEDULED)
+    await redis_client.delete(JOBS_PENDING, JOBS_SCHEDULED, JOBS_DEAD_LETTER)

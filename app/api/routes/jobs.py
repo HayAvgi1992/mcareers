@@ -121,9 +121,10 @@ async def cancel_job(
 async def retry_job(
     job_id: UUID,
     session: AsyncSession = Depends(get_db),
+    queue: QueueClient = Depends(get_queue),
 ) -> JobResponse:
     try:
-        job = await job_service.manual_retry(session, job_id)
+        job = await job_service.manual_retry(session, queue, job_id)
     except JobNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

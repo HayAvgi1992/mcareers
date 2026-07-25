@@ -497,6 +497,16 @@ Mark job failed if processing exceeds configured timeout.
 
 Move permanently failed jobs to a separate Redis list / DB flag for inspection.
 
+**Tasks**
+- [x] Redis LIST `jobs:dead_letter` (inspection index; capped)
+- [x] On permanent `failed`, LPUSH job id + log `job_dead_lettered`
+- [x] Manual retry removes id from DLQ
+- [x] Health exposes `dead_letter_depth`
+
+**Acceptance criteria**
+- [x] Permanent failures appear in Redis DLQ; retryable failures do not
+- [x] Postgres `status=failed` remains source of truth for inspection via API
+
 ---
 
 ## Phase 5 — Submission Polish

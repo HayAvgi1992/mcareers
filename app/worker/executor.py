@@ -94,11 +94,15 @@ async def process_one(queue: QueueClient, worker_id: str) -> bool:
                 timeout_seconds=settings.job_timeout_seconds,
                 error_message=err,
             )
-            await apply_failure(session, job, err)
+            await apply_failure(session, job, err, queue=queue)
         except UnknownJobTypeError as exc:
             # Unknown type will not succeed on retry — fail permanently.
             await apply_failure(
-                session, job, _safe_error_message(exc), permanent=True
+                session,
+                job,
+                _safe_error_message(exc),
+                queue=queue,
+                permanent=True,
             )
         except (HandlerError, Exception) as exc:
             err = _safe_error_message(exc)
@@ -118,7 +122,7 @@ async def process_one(queue: QueueClient, worker_id: str) -> bool:
                     status=job.status.value,
                     error_message=err,
                 )
-            await apply_failure(session, job, err)
+            await apply_failure(session, job, err, queue=queue)
 
     return True
 

@@ -187,10 +187,13 @@ async def cancel_job(
     return job
 
 
-async def manual_retry(session: AsyncSession, job_id: UUID) -> Job:
+async def manual_retry(
+    session: AsyncSession, queue: QueueClient, job_id: UUID
+) -> Job:
     """
     Re-open a permanently failed job for one more attempt.
-    Feeder enqueues when next_run_at is due — API does not push Redis.
+    Feeder enqueues when next_run_at is due — API does not push to pending.
+    Clears the Redis dead-letter index for this job.
     """
     job = await get_job(session, job_id)
     if job is None:
@@ -210,6 +213,7 @@ async def manual_retry(session: AsyncSession, job_id: UUID) -> Job:
     job.error_message = None
     await session.commit()
     await session.refresh(job)
+    await queue.remove_dead_letter(job.id)
 
     logger.info(
         "job_manual_retry",

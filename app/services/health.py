@@ -53,11 +53,13 @@ async def build_health_payload(
     queue_stats = {
         "pending_depth": None,
         "scheduled_depth": None,
+        "dead_letter_depth": None,
     }
     if redis_ok:
         queue_stats = {
             "pending_depth": await queue.pending_depth(),
             "scheduled_depth": await queue.scheduled_depth(),
+            "dead_letter_depth": await queue.dead_letter_depth(),
         }
 
     healthy = db_ok and redis_ok

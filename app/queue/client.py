@@ -10,7 +10,12 @@ from typing import Self
 from redis.asyncio import Redis
 
 from app.config import settings
-from app.queue.keys import JOBS_PENDING, JOBS_SCHEDULED
+from app.queue.keys import (
+    DEAD_LETTER_MAX_LEN,
+    JOBS_DEAD_LETTER,
+    JOBS_PENDING,
+    JOBS_SCHEDULED,
+)
 
 
 class QueueClient:
@@ -80,6 +85,20 @@ class QueueClient:
 
     async def scheduled_depth(self) -> int:
         return int(await self._redis.zcard(JOBS_SCHEDULED))
+
+    async def dead_letter(self, job_id: uuid.UUID) -> None:
+        """Record a permanently failed job for inspection (LPUSH + LTRIM)."""
+        pipe = self._redis.pipeline()
+        pipe.lpush(JOBS_DEAD_LETTER, str(job_id))
+        pipe.ltrim(JOBS_DEAD_LETTER, 0, DEAD_LETTER_MAX_LEN - 1) # keep only the last DEAD_LETTER_MAX_LEN jobs, remove old ones
+        await pipe.execute()
+
+    async def remove_dead_letter(self, job_id: uuid.UUID) -> None:
+        """Best-effort remove from the dead-letter list (e.g. on manual retry)."""
+        await self._redis.lrem(JOBS_DEAD_LETTER, 0, str(job_id)) # remove the job from the dead-letter list
+
+    async def dead_letter_depth(self) -> int:
+        return int(await self._redis.llen(JOBS_DEAD_LETTER))
 
     async def ping(self) -> bool:
         return bool(await self._redis.ping())
