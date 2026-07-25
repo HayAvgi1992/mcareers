@@ -1,210 +1,149 @@
+# SESSION_RULES.md
+
 # Session Rules
 
-Guidelines for every implementation session. Start a **new session per story** from [PLAN.md](./PLAN.md). Paste or `@`-reference this file at the beginning of each session so context stays consistent.
+This document defines the rules that must be followed during every implementation session.
+
+Each session should focus on **one story only** from `PLAN.md`.
 
 ---
 
-## 1. Before You Write Code
+# 1. Before Writing Code
 
-1. **Pick one story** from `PLAN.md` (e.g. Story 1.4: Worker executor loop).
-2. **State scope explicitly** — what is in and out for this session.
-3. **Read first:**
-   - [DECISIONS.md](./DECISIONS.md) — locked architecture
-   - [app/db/schema.sql](./app/db/schema.sql) — data model
-   - Relevant module boundaries in `PLAN.md` → Code Structure
-4. **Do not** implement other stories, refactor unrelated code, or expand into should-haves unless the current story requires it.
+Before implementing anything:
 
----
-
-## 2. Architecture Invariants (Never Break These)
-
-These are locked. If a session needs to change one, stop and update `DECISIONS.md` first.
-
-| Rule | Detail |
-|------|--------|
-| **Postgres is source of truth** | All job state, results, errors, idempotency live in DB. Redis is dispatch only. |
-| **Postgres wins on conflict** | If Redis and DB disagree, trust DB. Drop stale Redis entries; feeder recovers from DB. |
-| **Two-step job pickup** | Worker pops from Redis `jobs:pending`, then atomically claims in DB (`pending → processing`). Only the claim winner executes. |
-| **Worker does not re-enqueue on failure** | On failure/retry: update DB only (`next_run_at`, `attempt_count`, `status=pending`). Feeder promotes back to Redis. |
-| **Separate processes** | API never executes jobs. Worker never serves HTTP. |
-| **Priority score** | `(-priority * 10^12) + created_at_epoch_ms` in Redis ZSET. |
-| **Retry backoff** | Attempt 1: immediate · Attempt 2: 30s · Attempt 3: 2min · then permanent `failed`. |
-| **Idempotency** | Duplicate key → `200` + `{ id, status }` only. No new row. No re-enqueue. New key → `201`. |
-| **Manual retry** | Increment `max_attempts`, set `pending`, `next_run_at=now()`. Feeder enqueues. |
-| **Module boundaries** | Routes → services → DB/queue. Handlers never touch DB/Redis. See `PLAN.md`. |
+1. Choose a single story from `PLAN.md`.
+2. Clearly state:
+   - **In scope**
+   - **Out of scope**
+3. Read:
+   - `PLAN.md`
+   - `DECISIONS.md`
+   - `app/db/schema.sql` (if DB related)
+4. Do not implement future stories or unrelated refactors.
 
 ---
 
-## 3. Logging (Required on Every State Transition)
+# 2. Architecture Invariants
 
-Use **structured JSON logging** (structlog). See `app/logging_config.py`.
+These rules are locked.
 
-### Every log must include job context when a job is involved
+If one of them must change, update `DECISIONS.md` first.
 
-```python
-logger.info("job_claimed", job_id=str(job.id), job_type=job.job_type, status=job.status)
-```
-
-### Required log events
-
-| Event | Level | When |
-|-------|-------|------|
-| `job_submitted` | info | API creates or returns existing job |
-| `job_enqueued` | info | Job ID added to Redis pending |
-| `job_claimed` | info | Worker wins DB claim |
-| `job_started` | info | Handler execution begins |
-| `job_completed` | info | Success; result stored |
-| `job_failed` | warning/error | Handler error or permanent failure |
-| `job_dead_lettered` | info | Permanently failed job indexed in Redis `jobs:dead_letter` |
-| `job_timed_out` | warning | Handler exceeded `JOB_TIMEOUT_SECONDS`; then retry or fail |
-| `job_retry_scheduled` | info | Failure with retries remaining; log `next_run_at`, `attempt_count` |
-| `job_cancelled` | info | Cancelled via API |
-| `job_manual_retry` | info | Manual retry triggered |
-| `job_claim_skipped` | debug | Redis pop but DB claim failed (stale/cancelled) |
-| `job_feeder_promoted` | debug | Feeder enqueued job(s) from DB to Redis |
-| `job_reaped` | info | Expired processing lease reset to pending |
-| `job_schedule_promoted` | info | Scheduled job promoted to pending |
-
-### Logging rules
-
-- Log **state transitions**, not every loop iteration (avoid hot-loop noise).
-- Include `job_id` on every job-related log line.
-- Include `error` / `error_message` on failures.
-- Never log full payloads or secrets — log `job_type` and payload size if needed.
-- API errors: log `request_id` or path + status code.
+| Rule | Description |
+|------|-------------|
+| PostgreSQL is the Source of Truth | All job state lives in PostgreSQL. |
+| Redis is dispatch only | Redis can always be rebuilt from PostgreSQL. |
+| PostgreSQL wins on conflicts | Ignore stale Redis state. |
+| Two-step job pickup | Redis dequeue → PostgreSQL atomic claim. |
+| Atomic claim controls ownership | Only the worker that successfully claims executes the job. |
+| Retries are DB-driven | Workers never re-enqueue failed jobs directly. |
+| Separate responsibilities | API accepts requests. Workers execute jobs. Maintenance owns Scheduler, Feeder, Reaper and Cleanup. |
+| Handlers are isolated | Handlers never access PostgreSQL or Redis directly. |
+| Keep layers clean | Routes → Services → DB / Queue. |
 
 ---
 
-## 4. Security Requirements
+# 3. General Development Principles
 
-Apply on every session that touches input, handlers, or queue data.
-
-- **Validate all input** with Pydantic schemas — job type, payload shape, priority bounds, timestamps.
-- **Reject unknown `job_type`** at API and worker (defense in depth).
-- **Never eval or exec** payload data. Handlers receive typed/parsed data only.
-- **Sanitize error messages** stored on jobs — no stack traces with internal paths in API responses (logs are fine).
-- **Guard against queue poisoning** — malformed payloads must fail the job gracefully, not crash the worker process. Wrap handler execution in try/except; uncaught exceptions → `failed` + log.
-- **Idempotency keys** — validate length/format; reject empty strings.
+- Implement the smallest solution that satisfies the current story.
+- Do not introduce abstractions for future features.
+- Match the existing project style.
+- Keep functions focused.
+- Prefer readability over clever code.
+- Add comments only when explaining distributed-system behavior or concurrency.
 
 ---
 
-## 5. Code Standards
+# 4. Security Rules
 
-- **Python 3.11+**, type hints on public functions.
-- **Async** for FastAPI, SQLAlchemy async, redis.asyncio.
-- **Minimal scope** — only files needed for the current story.
-- **Match existing patterns** — read neighboring modules before adding code.
-- **No over-abstraction** — no helpers for one-liners; no premature generic frameworks.
-- **Comments** only for non-obvious distributed-systems logic (claim races, ordering guarantees).
-- **Create files** per `PLAN.md` structure as needed — don't scaffold the whole tree upfront.
+Always:
 
----
-
-## 6. Testing Requirements (Per Session)
-
-Every feature story must include or extend tests.
-
-| Story type | Test expectation |
-|------------|------------------|
-| API endpoint | httpx test against FastAPI app |
-| Worker logic | Test claim/feeder/retry **directly**, not only via HTTP |
-| Job handler | Unit test handler in isolation with mock job object |
-| Bug fix | Regression test |
-
-### Test quality rules
-
-- Assert **behavior**, not implementation details.
-- Tests must be **isolated** — use test DB/Redis (conftest fixtures), no external services.
-- Cover **happy path + one failure path** minimum per story.
-- Required scenarios (by Phase 2 end): submission, completion, retry, cancellation, idempotency, priority — each in its own file under `tests/`.
-- Tests must pass before the session ends: `pytest`
+- Validate input using Pydantic.
+- Reject unknown job types.
+- Never execute payload data.
+- Store sanitized error messages.
+- Wrap handler execution so bad jobs never crash the worker.
+- Validate idempotency keys.
 
 ---
 
-## 7. API Contract Reference
+# 5. Code Standards
 
-Follow these status codes and behaviors consistently.
-
-| Endpoint | Success | Notes |
-|----------|---------|-------|
-| `POST /jobs` | `201` created · `200` duplicate | Duplicate returns `{ id, status }` only |
-| `GET /jobs/{id}` | `200` · `404` | Include status, result, error, progress, timestamps |
-| `GET /jobs` | `200` | Filter by `status`, `job_type`; paginate |
-| `POST /jobs/{id}/cancel` | `200` · `404` · `409` | Pending (and scheduled later) only |
-| `POST /jobs/{id}/retry` | `200` · `404` · `409` | Failed jobs only; increments `max_attempts` |
-| `GET /health` | `200` · `503` | Should-have — DB + Redis + queue stats |
+- Python 3.11+
+- Full type hints on public functions.
+- Async FastAPI.
+- Async SQLAlchemy.
+- Async Redis.
+- No unnecessary abstractions.
+- No unrelated refactors.
 
 ---
 
-## 8. Documentation Updates (End of Session)
+# 6. Testing Rules
 
-Before closing a session, update what changed:
+Every completed story must include tests.
 
-| File | When to update |
-|------|----------------|
-| **PLAN.md** | Check off completed tasks / story acceptance criteria |
-| **DECISIONS.md** | Any new architectural choice or change to locked decisions |
-| **README.md** | New run instructions, env vars, example curl commands |
-| **AI_USAGE.md** | Note what AI helped with and what you corrected (especially concurrency) |
-| **app/db/schema.sql** | Any schema change + note migration approach |
+Guidelines:
 
-Do **not** create new markdown files unless explicitly requested.
-
----
-
-## 9. Session Exit Checklist
-
-Before ending the session, confirm:
-
-- [ ] Story scope completed — acceptance criteria from `PLAN.md` met
-- [ ] Architecture invariants preserved (§2)
-- [ ] State-transition logs added for new paths (§3)
-- [ ] Input validation and handler error wrapping in place (§4)
-- [ ] Tests written/updated and passing (§6)
-- [ ] `PLAN.md` checkboxes updated (§8)
-- [ ] `DECISIONS.md` / `README.md` / `AI_USAGE.md` updated if applicable (§8)
-- [ ] No unrelated refactors or scope creep
-- [ ] No secrets committed (`.env` stays gitignored)
+- Test behavior, not implementation.
+- Keep tests isolated.
+- Cover at least:
+  - Happy path
+  - One failure path
+- Run all tests before closing the session.
 
 ---
 
-## 10. What NOT To Do
+# 7. Documentation Updates
+
+When a story changes project behavior, update the relevant documentation.
+
+| File | Update When |
+|------|-------------|
+| PLAN.md | Story completed |
+| README.md | Usage or behavior changes |
+| DECISIONS.md | Architectural decision changes |
+| AI_USAGE.md | AI contributed to implementation |
+| schema.sql | Database schema changes |
+
+---
+
+# 8. Session Exit Checklist
+
+Before ending the session:
+
+- [ ] Story completed
+- [ ] Acceptance criteria satisfied
+- [ ] Tests passing
+- [ ] Architecture invariants preserved
+- [ ] Documentation updated
+- [ ] No unrelated refactors
+- [ ] No secrets committed
+
+---
+
+# 9. Things Never To Do
 
 - Don't commit unless explicitly asked.
-- Don't push to remote unless explicitly asked.
-- Don't implement should-haves during must-have stories.
-- Don't have the worker re-enqueue to `jobs:pending` on failure (feeder only). DLQ `jobs:dead_letter` LPUSH on permanent fail is allowed (inspection, not dispatch).
-- Don't use Kafka or DB-only dequeue — stack is Postgres + Redis per `DECISIONS.md`.
-- Don't process jobs inside API request handlers.
-- Don't skip tests for "simple" features.
-- Don't trust AI advice on concurrency without verifying against `DECISIONS.md`.
+- Don't push unless explicitly asked.
+- Don't implement future stories.
+- Don't let workers modify scheduling directly.
+- Don't let workers re-enqueue failed jobs.
+- Don't process jobs inside the API.
+- Don't bypass PostgreSQL ownership.
+- Don't trust AI concurrency suggestions without checking `DECISIONS.md`.
 
 ---
 
-## 11. Suggested Session Prompt Template
+# 10. Philosophy
 
-Copy into each new session:
+The project intentionally favors:
 
-```
-Implement PLAN.md Story X.X: [title]
+- Correctness over raw throughput.
+- Recoverability over complexity.
+- Simple operational behavior.
+- Clear ownership boundaries.
+- Predictable distributed-system behavior.
 
-Follow SESSION_RULES.md and DECISIONS.md.
-
-In scope: [list]
-Out of scope: [list]
-
-When done: tests passing, PLAN.md updated, logs on state transitions.
-```
-
----
-
-## 12. Evaluation Dimensions (Keep in Mind)
-
-Reviewers assess across these areas — each session should move at least one forward:
-
-1. **Spec-driven development** — traceable to PLAN story; honest AI_USAGE
-2. **Architecture** — clean separation, correct boundaries
-3. **Security** — validation, safe payloads, no worker crashes on bad jobs
-4. **Performance** — no DB hot loops on dequeue; efficient Redis ops
-5. **Observability** — structured logs, diagnosable state transitions
-6. **Tests** — meaningful, isolated, worker tested independently
+When in doubt, choose the simplest design that preserves these principles.

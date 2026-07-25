@@ -2,58 +2,135 @@
 
 ## Tools I Used
 
-- Cursor (Grok) for Story 0.1 scaffolding (requirements, config, `.env.example`)
-- Cursor (Grok) for Story 0.2 docker-compose / Dockerfile / boot stubs
-- Cursor (Grok) for Story 0.3 DB session/models + Redis queue client
-- Cursor (Grok) for Story 1.1 submit job API (schemas, service, route, tests)
-- Cursor (Grok) for Story 1.2 get job API
-- Cursor (Grok) for Story 1.3 mock handlers + registry
-- Cursor (Grok) for Story 1.4 worker claim + executor loop
-- Cursor (Grok) for Story 1.5 DB feeder loop
-- Cursor (Grok) for Story 2.1 priority processing tests
-- Cursor (Grok) for Story 2.2 retry backoff
-- Cursor (Grok) for Story 2.3 manual retry endpoint
-- Cursor (Grok) for Story 2.4 job cancellation
-- Cursor (Grok) for Story 2.5 idempotency
-- Cursor (Grok) for Story 2.6 list jobs with filters
-- Cursor (Grok) for Story 2.7 core test suite
-- Cursor (Grok) for Story 3.1 scheduled jobs
-- Cursor (Grok) for Story 3.2 worker crash recovery (reaper)
-- Cursor (Grok) for Story 3.3 health endpoint + queue stats
-- Cursor (Grok) for Story 3.4 structured JSON logging
-- Cursor (Grok) for Story 3.5 graceful shutdown
-- Cursor (Grok) for Story 4.1 multiple concurrent workers
-- Cursor (Grok) for splitting maintenance (feeder/scheduler/reaper) from worker
-- Cursor (Grok) for Story 4.2 batch progress (simple `report(pct)` callback; earlier HandlerSpec approach deferred/removed)
-- Cursor (Grok) for Story 4.3 job timeout enforcement
-- Cursor (Grok) for Story 4.4 dead letter queue
-- Cursor (Grok) for Story 5.1 README polish
-- Cursor (Grok) for Story 5.2 DECISIONS.md §5 + stale-section fixes
-- Cursor (Grok) for Story 5.3 AI_USAGE.md polish
+- Cursor (Grok) as the primary AI pair-programming assistant throughout the project.
+- AI was used to generate initial implementations, boilerplate, test scaffolding, Docker configuration, documentation drafts, and alternative implementation ideas.
+- Final architecture, distributed-system design, debugging, and code reviews remained manual.
+
+---
 
 ## What Helped Most
 
-- Quickly drafting a pydantic-settings `Settings` class with docker-compose hostname defaults.
-- Compose healthcheck + `depends_on` wiring so api/worker wait for postgres/redis.
-- Mapping `schema.sql` enums/columns into SQLAlchemy 2.0 `Mapped` models.
-- Wiring submit as DB-commit-then-Redis-enqueue so Postgres stays source of truth.
-- Scaffolding the two-step claim loop and feeder/reaper SQL from the locked decisions in `DECISIONS.md` / `SESSION_RULES.md`.
-- Generating focused pytest scenarios (priority, retry, cancel, idempotency) once fixtures/`conftest` were solid.
-- Rewriting README architecture text from the actual process layout (worker vs maintenance).
+AI provided the most value in repetitive engineering tasks:
+
+- FastAPI endpoint scaffolding.
+- SQLAlchemy model generation.
+- Docker / Docker Compose setup.
+- Redis and PostgreSQL client wrappers.
+- Test scaffolding.
+- Documentation drafting.
+- Refactoring repetitive code.
+
+These significantly accelerated implementation while still requiring manual review.
+
+---
 
 ## What I Had to Fix
 
-- Story 1.4: `app/worker.py` and `app/worker/` cannot coexist — moved the entrypoint to `app/worker/__main__.py` so `python -m app.worker` still works.
-- Story 3.1: scheduler promote path once lost enqueue/logging after a refactor; restored single-session promote + Redis push.
-- Story 3.5: AI added a `stop=` kwarg through `process_one`; we removed it — shutdown is loop-level (`while not stop.is_set()`), finish the in-flight job, then exit.
-- Story 4.1: scaling `worker` also scaled feeder/scheduler/reaper until we split a dedicated `maintenance` process.
-- Story 4.2: progress reporting grew into `HandlerSpec` / bind helpers; we deleted it and marked the story deferred.
-- Story 2.7: first test pass was oversized (~60+); trimmed repeatedly to a lean suite (now 10 highest-signal tests).
-- Tests: Redis DB **15** isolation so host pytest does not fight a live worker on DB 0.
+The majority of corrections were related to distributed-system design rather than syntax or implementation.
+
+### PostgreSQL as the Source of Truth
+
+AI occasionally treated Redis as part of the system state.
+
+I intentionally kept PostgreSQL as the only source of truth, allowing Redis to be fully rebuilt by the feeder after failures.
+
+---
+
+### Preventing Duplicate Execution
+
+I verified that Redis dequeue alone cannot prevent duplicate execution.
+
+The final design became:
+
+Redis dequeue
+
+↓
+
+Atomic PostgreSQL claim
+
+↓
+
+Execute only if claim succeeds
+
+This guarantees that only one worker owns a job.
+
+---
+
+### Retry Scheduling
+
+AI suggested workers could directly re-enqueue failed jobs.
+
+I rejected this approach.
+
+Workers only update PostgreSQL (`attempt_count`, `next_run_at`, `status`).
+
+The feeder later promotes eligible jobs back into Redis.
+
+---
+
+### Worker Crash Recovery
+
+The crash recovery flow required several design iterations.
+
+The final solution became:
+
+Lease
+
+↓
+
+Heartbeat
+
+↓
+
+Reaper
+
+↓
+
+Feeder
+
+This allows crashed jobs to be safely recovered without relying on Redis state.
+
+---
+
+### Maintenance Separation
+
+Initially executor and maintenance responsibilities lived in the same process.
+
+While reasoning about horizontal scaling I separated them into:
+
+- Worker (execution)
+- Maintenance (Scheduler, Feeder, Reaper, Cleanup)
+
+This prevents duplicated housekeeping when scaling workers.
+
+---
+
+### Simplicity over Abstraction
+
+Several AI suggestions introduced unnecessary abstractions.
+
+Examples included:
+
+- Complex progress reporting interfaces.
+- Generic handler wrappers.
+- Over-engineered shutdown plumbing.
+
+These were simplified to match the actual requirements.
+
+---
 
 ## What AI Struggled With
 
-- **Over-engineering when the prompt was vague.** Batch progress and graceful-shutdown wiring tended toward extra abstractions (registry wrappers, stop flags deep in the executor) that we later cut.
-- **Keeping process boundaries straight.** Early drafts assumed feeder/reaper lived with the executor; scaling exposed that. AI followed the existing layout instead of questioning it until we noticed duplicate housekeeping.
-- **Stale docs.** Partial edits left `AI_USAGE.md` / `DECISIONS.md` §4 describing the old “feeder in main worker” layout; needed an explicit pass to align docs with the maintenance split.
-- **Regression risk on small refactors.** Scheduler and logging kwargs sometimes dropped a line (enqueue, structured fields) when AI “cleaned up” a loop — needed a careful re-read against acceptance criteria.
+AI consistently performed well on implementation but was much weaker in architectural reasoning.
+
+Areas requiring manual engineering judgment included:
+
+- Distributed-system tradeoffs.
+- Concurrency correctness.
+- Process ownership.
+- Failure recovery.
+- Long-term architectural consistency.
+- Race condition analysis.
+- Choosing simpler solutions over generic abstractions.
+
+The final architecture was validated manually before implementation.

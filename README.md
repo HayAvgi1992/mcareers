@@ -1,34 +1,175 @@
 # mcareers
 
-Distributed background job processing system (Python / FastAPI / PostgreSQL / Redis).
+A distributed background job processing system for executing asynchronous tasks such as emails, webhooks, reports, and batch jobs.
 
-Postgres is the **source of truth** for job state. Redis is a **dispatch** layer (`jobs:pending` / `jobs:scheduled` ZSETs). Workers pop from Redis, then atomically claim in Postgres so only one executor runs each job.
+The system supports:
 
-## Prerequisites
+- Priority scheduling
+- Delayed (scheduled) execution
+- Automatic retries with backoff
+- Job cancellation
+- Progress reporting
+- Idempotent submissions
+- Crash recovery
+- Horizontal worker scaling
+
+The architecture intentionally separates **durability** from **dispatch**:
+
+- **PostgreSQL** is the **source of truth** and stores the complete job lifecycle.
+- **Redis** is used only as a high-performance dispatch layer.
+- Workers fetch job IDs from Redis, then atomically claim ownership in PostgreSQL to guarantee that only one worker executes a job at a time.
+
+---
+
+# Design Goals
+
+The project was designed around the following goals:
+
+- Keep PostgreSQL as the single source of truth.
+- Allow horizontal scaling of workers.
+- Recover automatically from crashes without losing jobs.
+- Support priority-based scheduling.
+- Support delayed execution.
+- Prevent duplicate job submission through idempotency.
+- Keep the operational model simple and deterministic.
+
+---
+
+# High-Level Architecture
+
+```
+                    +----------------+
+                    |     Client     |
+                    +----------------+
+                             |
+                             v
+                     +----------------+
+                     | FastAPI (API)  |
+                     +----------------+
+                       |            |
+             write job |            | enqueue
+                       |            |
+                       v            v
+              +----------------+   +----------------------+
+              |   PostgreSQL   |   |        Redis         |
+              | Source of Truth|   | Dispatch Queues      |
+              +----------------+   +----------------------+
+                       ^                    |
+                       |                    |
+             atomic claim                   |
+                       |                    |
+                 +-------------------------------+
+                 |         Workers (N)           |
+                 | Redis Pop -> DB Claim -> Run  |
+                 +-------------------------------+
+
+                +------------------------------+
+                |        Maintenance           |
+                |------------------------------|
+                | Scheduler                    |
+                | Feeder                       |
+                | Reaper                       |
+                | Idempotency Cleanup          |
+                +------------------------------+
+```
+
+---
+
+# Reliability Model
+
+The system favors **correctness** and **recoverability** over maximum throughput.
+
+Core guarantees:
+
+- PostgreSQL is always the source of truth.
+- Redis can be rebuilt from PostgreSQL.
+- Workers never execute a job without first claiming it in PostgreSQL.
+- Atomic DB claim prevents concurrent execution.
+- Lease + heartbeat detect crashed workers.
+- Feeder restores Redis if dispatch data is lost.
+- Scheduled jobs are promoted only when due.
+- Failed jobs retry using exponential backoff.
+- Permanent failures are moved to a Dead Letter Queue.
+
+The system provides **at-least-once execution semantics**.
+
+Because a worker may crash after performing a side effect but before marking the job as completed, handlers interacting with external systems should be implemented in an idempotent manner whenever possible.
+
+---
+
+# Architecture Overview
+
+```
+Client
+    |
+    v
+FastAPI API
+    |
+    +----------------------+
+    |                      |
+    v                      v
+PostgreSQL            Redis Dispatch
+(Source of Truth)     (Priority Queues)
+
+           Maintenance
+        -----------------
+        Scheduler
+        Feeder
+        Reaper
+        Cleanup
+
+               |
+               v
+
+Workers (N replicas)
+
+Redis POP
+      ↓
+Atomic DB Claim
+      ↓
+Handler
+      ↓
+Complete / Retry / Failed
+```
+
+---
+
+# Core Design Decisions
+
+- PostgreSQL owns the complete job lifecycle.
+- Redis is treated as a recoverable dispatch layer.
+- Workers never modify scheduling state directly.
+- Maintenance responsibilities are isolated from workers.
+- Job ownership is controlled exclusively through PostgreSQL.
+- Failed workers are detected using leases and heartbeats.
+- Retry scheduling happens only in PostgreSQL.
+- Redis queues can always be reconstructed from database state.
+
+---
+
+# Prerequisites
 
 - Docker + Docker Compose
-- (Optional, for host tests) Python 3.11+, local Postgres + Redis on `localhost`
+- (Optional) Python 3.11+, local PostgreSQL and Redis
 
-## How to run
+---
+
+# How to Run
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-| Service       | Port | Role |
-|---------------|------|------|
-| `api`         | 8000 | FastAPI HTTP API |
-| `worker`      | —    | Job executor only (safe to scale) |
-| `maintenance` | —    | Feeder + scheduler + reaper + idempotency cleanup (keep **one** replica) |
-| `postgres`    | 5432 | Job state / results |
-| `redis`       | 6379 | Priority dispatch queues |
+| Service | Port | Purpose |
+|---------|------|---------|
+| api | 8000 | FastAPI HTTP API |
+| worker | — | Executes jobs (safe to scale horizontally) |
+| maintenance | — | Scheduler, feeder, reaper, cleanup (run one replica) |
+| postgres | 5432 | Source of truth |
+| redis | 6379 | Dispatch queues |
 
-`api`, `worker`, and `maintenance` load env from `.env` (docker-compose hostnames).
-
-**Phase 4 demo timings:** the checked-in `.env` uses short backoffs / mock sleeps so you can exercise timeout, progress, and DLQ quickly (`report` sleeps 8s with a 5s timeout; batch items sleep 0.4s). Spec defaults are in `.env.example`. After changing `.env`, recreate: `docker compose up -d --scale worker=2 --force-recreate`.
-
-Scale executors (do **not** scale `maintenance`):
+Scale workers:
 
 ```bash
 docker compose up --build --scale worker=2
@@ -40,25 +181,35 @@ Stop:
 docker compose down
 ```
 
-## How to run tests
+---
 
-With the stack running (uses compose service hostnames inside the container):
+# Running Tests
+
+Inside Docker:
 
 ```bash
 docker compose exec api python -m pytest -q
 ```
 
-On the host (Postgres + Redis on `127.0.0.1`; tests use Redis DB **15** so they do not collide with a live worker on DB 0):
+Host:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
 export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/mcareers
+
 pytest -q
 ```
 
-## Example: submit a job
+---
+
+# Example Requests
+
+Job types: `email`, `webhook`, `report`, `batch`. Batch jobs update `progress_pct` while processing; poll with `GET /jobs/<id>`.
+
+### Submit a job
 
 ```bash
 curl -s -X POST http://localhost:8000/jobs \
@@ -66,13 +217,15 @@ curl -s -X POST http://localhost:8000/jobs \
   -d '{"job_type":"email","payload":{"to":"user@example.com"},"priority":1}' | jq
 ```
 
-Poll status / result:
+### Poll status / result
 
 ```bash
 curl -s http://localhost:8000/jobs/<JOB_ID> | jq '.status, .result, .progress_pct'
 ```
 
-Idempotent submit (duplicate key → `200` with `{id, status}` only):
+### Idempotent submit
+
+Duplicate key → `200` with `{id, status}` only:
 
 ```bash
 curl -s -X POST http://localhost:8000/jobs \
@@ -81,34 +234,35 @@ curl -s -X POST http://localhost:8000/jobs \
   -d '{"job_type":"email","payload":{"to":"user@example.com"}}' | jq
 ```
 
-Other useful endpoints:
+### List jobs
 
 ```bash
-# List
 curl -s 'http://localhost:8000/jobs?status=pending&limit=20' | jq
+```
 
-# Cancel (pending or scheduled)
+### Cancel (pending or scheduled)
+
+```bash
 curl -s -X POST http://localhost:8000/jobs/<JOB_ID>/cancel | jq
+```
 
-# Manual retry (failed only)
+### Manual retry (failed only)
+
+```bash
 curl -s -X POST http://localhost:8000/jobs/<JOB_ID>/retry | jq
+```
 
-# Health + queue stats
-curl -s http://localhost:8000/health | jq
+### Schedule for later
 
-# Schedule for later
+```bash
 curl -s -X POST http://localhost:8000/jobs \
   -H 'Content-Type: application/json' \
   -d "{\"job_type\":\"email\",\"payload\":{\"to\":\"later@example.com\"},\"scheduled_at\":\"$(date -u -d '+2 minutes' +%Y-%m-%dT%H:%M:%SZ)\"}" | jq
 ```
 
-Expect `status: "scheduled"`. The worker scheduler promotes it to `pending` when due (~1s latency).
+Expect `status: "scheduled"`. Maintenance promotes it to `pending` when due (~1s latency).
 
-Job types: `email`, `webhook`, `report`, `batch`.
-
-Batch jobs update `progress_pct` while processing items; poll with `GET /jobs/<id>`.
-
-### Health check
+### Health (queue stats + live workers)
 
 ```bash
 curl -s http://localhost:8000/health | jq
@@ -124,13 +278,13 @@ Your job UUID should appear in `jobs:pending`.
 
 ### Multiple workers (no duplicate execution)
 
-Scale **workers** only; leave **maintenance** at one replica (it owns feeder/scheduler/reaper/cleanup):
+Scale **workers** only; leave **maintenance** at one replica:
 
 ```bash
 docker compose up --build --scale worker=2
 ```
 
-Submit a burst of jobs:
+Submit a burst:
 
 ```bash
 for i in $(seq 1 10); do
@@ -140,7 +294,7 @@ for i in $(seq 1 10); do
 done
 ```
 
-Check that distinct `worker_id`s appear and each job is claimed once:
+Check distinct `worker_id`s and single claims:
 
 ```bash
 docker compose logs worker | grep job_claimed
@@ -155,42 +309,42 @@ docker compose exec postgres \
       ORDER BY created_at DESC;"
 ```
 
-Expect each job `completed` with `attempt_count = 1` (successful path).
+Expect each job `completed` with `attempt_count = 1` on the successful path.
 
-## Brief architecture overview
+---
 
-```
-Client → API (FastAPI)
-           │
-           ├─ write job row (Postgres)
-           └─ ZADD jobs:pending or jobs:scheduled (Redis)
+# Current Limitations
 
-maintenance
-  ├─ scheduler: due scheduled → pending + enqueue
-  ├─ feeder:    ready pending rows → Redis (NX)
-  ├─ reaper:    expired processing leases → pending
-  └─ cleanup:   null idempotency keys older than 24h
+This project intentionally keeps several production concerns out of scope:
 
-worker (N replicas)
-  └─ ZPOPMIN → DB claim (pending→processing) → handler (≤ JOB_TIMEOUT_SECONDS) → complete/fail
-```
+- At-least-once execution (not exactly-once)
+- Single maintenance instance (no leader election)
+- Mock job handlers
+- Local Docker deployment
+- No authentication or authorization
+- No metrics or distributed tracing
 
-**Invariants**
+---
 
-- Postgres wins if Redis and DB disagree (stale Redis entries are dropped on failed claim).
-- Workers do **not** re-enqueue on failure; they set `next_run_at` and the feeder promotes later.
-- Priority score in Redis: `(-priority * 10^12) + created_at_epoch_ms` (higher priority first; FIFO within the same priority).
-- Retry backoff: attempt 1 immediate · 2 → 30s · 3 → 2min · then permanent `failed`.
-- Handler timeout (`JOB_TIMEOUT_SECONDS`, default 30) fails the attempt via the same retry path; keep it below `WORKER_LEASE_SECONDS`.
-- Permanent failures: Postgres `status=failed` + Redis LIST `jobs:dead_letter` (inspection only; not dispatched). List failed jobs with `GET /jobs?status=failed`.
+# Possible Future Improvements
 
-More detail: [DECISIONS.md](./DECISIONS.md). Session conventions: [SESSION_RULES.md](./SESSION_RULES.md).
+- Kubernetes deployment
+- Leader election for maintenance
+- Prometheus metrics
+- OpenTelemetry tracing
+- S3 report storage
+- Authentication
+- Web dashboard
+- Multi-tenant support
 
-## Project docs
+---
+
+# Project Documentation
 
 | File | Purpose |
 |------|---------|
-| [PLAN.md](./PLAN.md) | Build stories / checklist |
-| [DECISIONS.md](./DECISIONS.md) | Architecture trade-offs |
-| [AI_USAGE.md](./AI_USAGE.md) | AI tooling notes |
-| [app/db/schema.sql](./app/db/schema.sql) | Postgres schema |
+| PLAN.md | Build roadmap |
+| DECISIONS.md | Architecture decisions and trade-offs |
+| SESSION_RULES.md | Project conventions and development rules |
+| AI_USAGE.md | AI usage and development process |
+| app/db/schema.sql | Database schema |

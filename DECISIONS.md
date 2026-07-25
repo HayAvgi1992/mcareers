@@ -2,58 +2,117 @@
 
 ## 1. Job Pickup Strategy
 
-**Approach chosen:** Redis priority pop + PostgreSQL conditional claim.
+**Decision:** Redis dispatch + PostgreSQL atomic claim.
 
-Workers pop the highest-priority job ID from the Redis `jobs:pending` ZSET, then atomically claim it in Postgres (`UPDATE ... WHERE id = ? AND status = 'pending'`). Only the worker that wins the DB claim executes the job. If the claim fails (cancelled, already taken, or not yet due), the worker discards the stale Redis entry and loops.
+Workers dequeue a job ID from Redis and then atomically claim ownership in PostgreSQL (`UPDATE ... WHERE status='pending'`).
 
-**Why:** Redis gives fast O(log N) priority dequeue; Postgres remains the source of truth for state, cancellation, and idempotency. The two-step pattern prevents duplicate execution under concurrent workers without relying on Redis alone.
+**Why**
 
-**Trade-offs:** Two-step pickup adds a small latency vs Redis-only. We accept this in exchange for correctness when Redis and DB diverge. Postgres wins on any conflict.
+- Redis provides fast priority dispatch.
+- PostgreSQL remains the source of truth.
+- Atomic DB claim guarantees only one worker owns a job.
+
+**Tradeoff**
+
+Pickup requires both Redis and PostgreSQL, adding one extra database operation, but guarantees correctness even if Redis becomes stale.
 
 ---
 
 ## 2. Worker Crash Recovery
 
-**Approach chosen:** Lease + reaper loop. On claim, the worker sets `leased_until = now + worker_lease_seconds`. A reaper periodically finds `status = processing AND leased_until < now()`, resets those rows to `pending` (clears `worker_id` / `leased_until`, sets `next_run_at = NULL`), and leaves Redis alone. The existing DB feeder then re-enqueues recovered jobs into `jobs:pending`.
+**Decision:** Lease + heartbeat + reaper.
 
-**Why:** Postgres remains source of truth. If a worker dies mid-handler, the lease expires and another worker can claim the job without requiring Redis heartbeats or distributed locks. Keeping enqueue in the feeder avoids duplicate Redis push logic on the recovery path.
+Workers periodically renew a lease while processing a job. If a worker crashes, lease renewal stops. After the lease expires, the reaper moves the job back to `pending`, and the feeder re-enqueues it.
 
-**What happens if worker crashes mid-job:** After `leased_until` passes, the reaper returns the job to `pending`. The feeder promotes it to Redis; a live worker claims and runs it again. `attempt_count` is not decremented (the crashed attempt already counted toward `max_attempts`).
+**Why**
 
----
+- Detect crashed workers automatically.
+- Recover unfinished jobs without manual intervention.
+- Keep ownership in PostgreSQL rather than Redis.
 
-## 3. Priority Queue Implementation
+**Tradeoff**
 
-**Approach chosen:** Redis sorted set (`jobs:pending`) with composite score.
-
-Score formula: `(-priority * 10^12) + created_at_epoch_ms` — higher priority first; FIFO within the same priority level.
-
-**Why:** Native Redis ZSET ordering avoids a DB hot loop on dequeue. Priority is applied at dispatch time; the feeder preserves the same ordering when promoting jobs from Postgres to Redis.
+Recovery is eventual (up to one lease interval), not instantaneous.
 
 ---
 
-## 4. Retry Backoff Strategy
+## 3. Priority Queue
 
-**Approach chosen:** DB-driven retry scheduling (Option B). The worker does not re-enqueue to Redis on failure.
+**Decision:** Redis Sorted Set.
 
-On failure the worker only updates Postgres: increment `attempt_count`, set `next_run_at` to the backoff delay, keep `status = 'pending'`. A feeder loop in the **maintenance** process polls Postgres for ready jobs (`status = 'pending' AND (next_run_at IS NULL OR next_run_at <= now())`) and enqueues them to Redis. This keeps failure handling out of the execution path and centralizes queue promotion in one place.
+Priority score:
 
-Manual retry (`POST /jobs/{id}/retry`): increment `max_attempts`, set `status = 'pending'`, `next_run_at = now()`. The feeder picks it up on the next cycle.
+```
+(-priority × 10¹²) + created_at_epoch_ms
+```
 
-**Timing (defaults; overridable via env):**
-- Attempt 1: immediate (`next_run_at = NULL`)
-- Attempt 2: `RETRY_BACKOFF_AFTER_ATTEMPT_1_SECONDS` (default 30s) after failure
-- Attempt 3: `RETRY_BACKOFF_AFTER_ATTEMPT_2_SECONDS` (default 120s) after failure
-- After `attempt_count >= max_attempts`: `status = 'failed'` permanently
+This guarantees:
+
+- Higher priority jobs first.
+- FIFO ordering within the same priority.
+
+**Why**
+
+Redis provides efficient O(log N) priority operations without polling PostgreSQL.
 
 ---
 
-## 5. One Thing I Would Do Differently With More Time
+## 4. Retry Strategy
 
-**Separate maintenance from day one.** Early on, feeder / scheduler / reaper ran inside the same process as the executor. That worked until we scaled workers with Compose — every replica also ran housekeeping, which is wasteful and races. Splitting into `python -m app.worker` (executor) and `python -m app.maintenance` (one replica) fixed it, but the cut was late. I would have drawn that boundary in the initial architecture instead of retrofitting it.
+**Decision:** PostgreSQL-driven retries.
 
-**Keep handler progress boring.** Mid-run `progress_pct` uses a `report(pct)` callback passed only to batch (`if job.job_type == batch`). Other handlers stay `run(job)` with no progress arg.
+Workers never re-enqueue failed jobs directly.
 
-**Timeout vs lease:** Handler runtime is capped by `JOB_TIMEOUT_SECONDS` (`asyncio.wait_for` in the executor). A timeout fails the attempt through the normal retry path (`apply_failure`). Keep timeout below `WORKER_LEASE_SECONDS` so the worker can finalize DB state before the reaper assumes a crash. Lease/reaper still covers true worker death.
+On failure:
 
-**Dead letter (Story 4.4):** Postgres `status=failed` is the source of truth. On permanent failure the worker also LPUSHes the job id onto Redis LIST `jobs:dead_letter` (trimmed to 1000) for quick inspection — this is not a dispatch queue and does not re-enqueue work. Manual retry removes the id from the list; the feeder still promotes from Postgres.
+- Update `attempt_count`
+- Set `next_run_at`
+- Keep status `pending`
+
+The feeder promotes ready jobs back into Redis.
+
+**Why**
+
+This centralizes retry scheduling in PostgreSQL and keeps Redis as a stateless dispatch layer.
+
+---
+
+## 5. Maintenance Separation
+
+**Decision:** Separate executors from maintenance processes.
+
+Workers execute jobs only.
+
+A single maintenance process owns:
+
+- Scheduler
+- Feeder
+- Reaper
+- Idempotency cleanup
+
+**Why**
+
+Scaling workers should increase execution capacity only. Background maintenance should have a single owner to avoid duplicate housekeeping work.
+
+---
+
+## 6. Dead Letter Queue
+
+**Decision:** Failed jobs remain in PostgreSQL and are also recorded in a Redis Dead Letter List.
+
+**Why**
+
+- PostgreSQL stores the complete failure state.
+- Redis provides quick operational visibility of recent failures.
+
+The Dead Letter Queue is for inspection only and never dispatches jobs.
+
+---
+
+## 7. Execution Semantics
+
+The system provides **at-least-once** execution.
+
+Duplicate execution is prevented during normal operation by the atomic PostgreSQL claim.
+
+If a worker crashes after performing a side effect but before completing the transaction, the job may execute again after recovery. Handlers interacting with external systems should therefore be idempotent whenever possible.
