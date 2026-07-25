@@ -20,7 +20,7 @@ docker compose up --build
 |---------------|------|------|
 | `api`         | 8000 | FastAPI HTTP API |
 | `worker`      | —    | Job executor only (safe to scale) |
-| `maintenance` | —    | Feeder + scheduler + reaper (keep **one** replica) |
+| `maintenance` | —    | Feeder + scheduler + reaper + idempotency cleanup (keep **one** replica) |
 | `postgres`    | 5432 | Job state / results |
 | `redis`       | 6379 | Priority dispatch queues |
 
@@ -124,7 +124,7 @@ Your job UUID should appear in `jobs:pending`.
 
 ### Multiple workers (no duplicate execution)
 
-Scale **workers** only; leave **maintenance** at one replica (it owns feeder/scheduler/reaper):
+Scale **workers** only; leave **maintenance** at one replica (it owns feeder/scheduler/reaper/cleanup):
 
 ```bash
 docker compose up --build --scale worker=2
@@ -168,7 +168,8 @@ Client → API (FastAPI)
 maintenance
   ├─ scheduler: due scheduled → pending + enqueue
   ├─ feeder:    ready pending rows → Redis (NX)
-  └─ reaper:    expired processing leases → pending
+  ├─ reaper:    expired processing leases → pending
+  └─ cleanup:   null idempotency keys older than 24h
 
 worker (N replicas)
   └─ ZPOPMIN → DB claim (pending→processing) → handler (≤ JOB_TIMEOUT_SECONDS) → complete/fail

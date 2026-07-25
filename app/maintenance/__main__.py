@@ -1,4 +1,4 @@
-"""python -m app.maintenance entrypoint (feeder + scheduler + reaper)."""
+"""python -m app.maintenance entrypoint (feeder + scheduler + reaper + cleanup)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from app.db.session import check_db, dispose_engine
 from app.logging_config import configure_logging, get_logger
 from app.queue.client import QueueClient
 from app.worker.feeder import run_feeder_loop
+from app.worker.idempotency_cleanup import run_idempotency_cleanup_loop
 from app.worker.reaper import run_reaper_loop
 from app.worker.scheduler import run_scheduler_loop
 
@@ -37,6 +38,7 @@ async def run() -> None:
             run_feeder_loop(queue, stop),
             run_scheduler_loop(queue, stop),
             run_reaper_loop(stop),
+            run_idempotency_cleanup_loop(stop),
         )
     finally:
         for sig in (signal.SIGTERM, signal.SIGINT):

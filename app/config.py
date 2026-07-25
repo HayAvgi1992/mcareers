@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Scheduler / feeder poll interval.
     scheduler_poll_interval_seconds: float = 1.0
 
+    # How often maintenance nulls out idempotency keys older than 24h.
+    idempotency_cleanup_interval_seconds: float = 3600.0
+
     # Default max attempts for new jobs (matches schema default).
     default_max_attempts: int = 3
 

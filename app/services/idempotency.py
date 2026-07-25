@@ -36,12 +36,7 @@ async def find_job_by_idempotency_key(
 ) -> Job | None:
     return await session.scalar(select(Job).where(Job.idempotency_key == key))
 
-""" 
-Cleanup expired idempotency keys from the database.
 
-We currently dont have a background job to call this function to cleanup expired idempotency keys.
-The idempotency keys are saved in the database and will be cleaned up when the job is processed or manually when needed
-"""
 async def cleanup_expired_idempotency_keys(
     session: AsyncSession,
     *,
@@ -49,7 +44,7 @@ async def cleanup_expired_idempotency_keys(
 ) -> int:
     """
     Null out idempotency_key on jobs older than 24h so keys can be reused.
-    Returns the number of rows updated.
+    Called by the maintenance cleanup loop. Returns the number of rows updated.
     """
     cutoff = (now or datetime.now(UTC)) - IDEMPOTENCY_TTL
     result = await session.execute(
