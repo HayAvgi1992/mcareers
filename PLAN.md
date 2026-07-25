@@ -480,6 +480,15 @@ mcareers/
 
 Update `progress_pct` during batch processing; expose via GET.
 
+**Tasks**
+- [x] `report(pct)` passed only to batch (`job_type == batch`); other handlers stay `run(job)`
+- [x] Batch handler reports progress as items complete; commits mid-run
+- [x] Completion still sets `progress_pct = 100`; GET exposes live values
+
+**Acceptance criteria**
+- [x] Mid-run `progress_pct` visible via `GET /jobs/{id}` while status is `processing`
+- [x] Completed batch jobs show `progress_pct = 100`
+
 ### Story 4.3: Job timeout enforcement
 
 Mark job failed if processing exceeds configured timeout.

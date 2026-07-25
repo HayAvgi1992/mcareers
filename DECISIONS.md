@@ -52,7 +52,7 @@ Manual retry (`POST /jobs/{id}/retry`): increment `max_attempts`, set `status = 
 
 **Separate maintenance from day one.** Early on, feeder / scheduler / reaper ran inside the same process as the executor. That worked until we scaled workers with Compose — every replica also ran housekeeping, which is wasteful and races. Splitting into `python -m app.worker` (executor) and `python -m app.maintenance` (one replica) fixed it, but the cut was late. I would have drawn that boundary in the initial architecture instead of retrofitting it.
 
-**Keep handler progress boring.** Mid-run batch `progress_pct` was built with a `HandlerSpec` + progress-callback layer, then deleted as too much machinery for the value. Completion still sets `progress_pct = 100`. With more time I would either skip progress until a real consumer needs it, or pass a single optional `report(pct)` callable into `run` — nothing registry-shaped.
+**Keep handler progress boring.** Mid-run `progress_pct` uses a `report(pct)` callback passed only to batch (`if job.job_type == batch`). Other handlers stay `run(job)` with no progress arg.
 
 **Timeout vs lease:** Handler runtime is capped by `JOB_TIMEOUT_SECONDS` (`asyncio.wait_for` in the executor). A timeout fails the attempt through the normal retry path (`apply_failure`). Keep timeout below `WORKER_LEASE_SECONDS` so the worker can finalize DB state before the reaper assumes a crash. Lease/reaper still covers true worker death.
 

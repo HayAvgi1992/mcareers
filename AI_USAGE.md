@@ -24,7 +24,7 @@
 - Cursor (Grok) for Story 3.5 graceful shutdown
 - Cursor (Grok) for Story 4.1 multiple concurrent workers
 - Cursor (Grok) for splitting maintenance (feeder/scheduler/reaper) from worker
-- Cursor (Grok) for Story 4.2 batch progress (implemented, then deferred/removed)
+- Cursor (Grok) for Story 4.2 batch progress (simple `report(pct)` callback; earlier HandlerSpec approach deferred/removed)
 - Cursor (Grok) for Story 4.3 job timeout enforcement
 - Cursor (Grok) for Story 4.4 dead letter queue
 - Cursor (Grok) for Story 5.1 README polish

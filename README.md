@@ -103,6 +103,8 @@ Expect `status: "scheduled"`. The worker scheduler promotes it to `pending` when
 
 Job types: `email`, `webhook`, `report`, `batch`.
 
+Batch jobs update `progress_pct` while processing items; poll with `GET /jobs/<id>`.
+
 ### Health check
 
 ```bash

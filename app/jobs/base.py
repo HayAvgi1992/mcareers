@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 from app.db.models import Job
+
+# Mid-run progress callback used by batch (and any future progress-aware handler).
+ProgressReporter = Callable[[int], Awaitable[None]]
 
 
 class JobHandler(Protocol):

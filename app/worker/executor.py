@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.config import settings
-from app.db.models import Job, JobStatus
+from app.db.models import Job, JobStatus, JobType
 from app.db.session import SessionLocal
 from app.jobs.base import HandlerError, UnknownJobTypeError
 from app.jobs.registry import get_handler
@@ -34,6 +34,12 @@ async def _complete_job(session, job: Job, result: dict[str, Any]) -> None:
     job.error_message = None
     job.next_run_at = None
     job.leased_until = None
+    await session.commit()
+
+
+async def _report_progress(session, job: Job, pct: int) -> None:
+    """Persist mid-run progress so GET /jobs/{id} can observe it."""
+    job.progress_pct = max(0, min(100, int(pct)))
     await session.commit()
 
 
@@ -73,8 +79,15 @@ async def process_one(queue: QueueClient, worker_id: str) -> bool:
 
         try:
             handler = get_handler(job.job_type)
+            if job.job_type == JobType.batch:
+                run = handler.run(
+                    job,
+                    report=lambda pct: _report_progress(session, job, pct),
+                )
+            else:
+                run = handler.run(job)
             result = await asyncio.wait_for(
-                handler.run(job),
+                run,
                 timeout=settings.job_timeout_seconds,
             )
             await _complete_job(session, job, result)
