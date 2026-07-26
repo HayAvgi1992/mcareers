@@ -1,4 +1,4 @@
-"""Atomic DB claim: pending → processing with lease."""
+"""Atomic DB claim and lease renewal: pending → processing with lease."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from sqlalchemy import func, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Job, JobStatus
+from app.db.session import SessionLocal
 
 
 async def claim_job(
@@ -45,3 +46,32 @@ async def claim_job(
         return None
     await session.commit()
     return job
+
+
+async def renew_job_lease(
+    job_id: uuid.UUID,
+    worker_id: str,
+    lease_seconds: int,
+) -> datetime | None:
+    """
+    Extend leased_until for a job this worker still owns.
+    Returns the new leased_until, or None if the job was reaped / finalized.
+    """
+    leased_until = datetime.now(UTC) + timedelta(seconds=lease_seconds)
+    async with SessionLocal() as session:
+        result = await session.execute(
+            update(Job)
+            .where(
+                Job.id == job_id,
+                Job.status == JobStatus.processing,
+                Job.worker_id == worker_id,
+            )
+            .values(leased_until=leased_until)
+            .returning(Job.leased_until)
+        )
+        new_until = result.scalar_one_or_none()
+        if new_until is None:
+            await session.rollback()
+            return None
+        await session.commit()
+        return new_until

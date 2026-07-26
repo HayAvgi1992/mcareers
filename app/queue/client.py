@@ -15,6 +15,7 @@ from app.queue.keys import (
     JOBS_DEAD_LETTER,
     JOBS_PENDING,
     JOBS_SCHEDULED,
+    WORKERS_HEARTBEAT,
 )
 
 
@@ -99,6 +100,56 @@ class QueueClient:
 
     async def dead_letter_depth(self) -> int:
         return int(await self._redis.llen(JOBS_DEAD_LETTER))
+
+    async def worker_heartbeat(
+        self,
+        worker_id: str,
+        *,
+        now: float | None = None,
+        ttl_seconds: float | None = None,
+    ) -> None:
+        """
+        Refresh this worker's last_seen score and prune stale members.
+        TTL controls how long a worker stays "alive" without a beat.
+        """
+        ts = time.time() if now is None else now
+        ttl = (
+            settings.worker_heartbeat_ttl_seconds
+            if ttl_seconds is None
+            else ttl_seconds
+        )
+        pipe = self._redis.pipeline()
+        
+        pipe.zadd(WORKERS_HEARTBEAT, {worker_id: ts})
+        pipe.zremrangebyscore(WORKERS_HEARTBEAT, min="-inf", max=ts - ttl)
+        await pipe.execute()
+
+    async def worker_offline(self, worker_id: str) -> None:
+        """Remove this worker from the heartbeat set (graceful shutdown)."""
+        await self._redis.zrem(WORKERS_HEARTBEAT, worker_id)
+
+    async def list_alive_workers(
+        self,
+        *,
+        now: float | None = None,
+        ttl_seconds: float | None = None,
+    ) -> list[tuple[str, float]]:
+        """
+        Return (worker_id, last_seen_epoch) for workers with a recent heartbeat.
+        """
+        ts = time.time() if now is None else now
+        ttl = (
+            settings.worker_heartbeat_ttl_seconds
+            if ttl_seconds is None
+            else ttl_seconds
+        )
+        items = await self._redis.zrangebyscore(
+            WORKERS_HEARTBEAT,
+            min=ts - ttl,
+            max="+inf",
+            withscores=True,
+        )
+        return [(str(worker_id), float(score)) for worker_id, score in items]
 
     async def ping(self) -> bool:
         return bool(await self._redis.ping())

@@ -12,6 +12,7 @@ from app.db.session import check_db, dispose_engine
 from app.logging_config import configure_logging, get_logger
 from app.queue.client import QueueClient
 from app.worker.executor import run_executor_loop
+from app.worker.heartbeat import LeaseHolder, run_heartbeat_loop
 
 configure_logging()
 logger = get_logger(__name__)
@@ -26,6 +27,7 @@ async def run() -> None:
     queue = await QueueClient.connect()
     worker_id = _make_worker_id()
     stop = asyncio.Event()
+    lease_holder = LeaseHolder()
     logger.info("worker_connected", worker_id=worker_id)
 
     loop = asyncio.get_running_loop() # get the current event loop
@@ -39,7 +41,10 @@ async def run() -> None:
         loop.add_signal_handler(sig, _request_shutdown)
 
     try:
-        await run_executor_loop(queue, worker_id, stop)
+        await asyncio.gather(
+            run_executor_loop(queue, worker_id, stop, lease_holder),
+            run_heartbeat_loop(queue, worker_id, stop, lease_holder),
+        )
     finally:
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.remove_signal_handler(sig) # clean up the signal handler

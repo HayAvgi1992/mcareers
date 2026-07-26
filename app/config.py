@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     # Idle sleep when the Redis pending queue is empty.
     executor_poll_interval_seconds: float = 0.5
 
+    # Worker liveness for GET /health (Redis heartbeat ZSET).
+    worker_heartbeat_interval_seconds: float = 5.0
+    # Drop from "alive" if no beat within this window (keep > interval).
+    worker_heartbeat_ttl_seconds: float = 15.0
+
     # Scheduler / feeder poll interval.
     scheduler_poll_interval_seconds: float = 1.0
 

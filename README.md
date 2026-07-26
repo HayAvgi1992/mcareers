@@ -85,7 +85,7 @@ Core guarantees:
 - Redis can be rebuilt from PostgreSQL.
 - Workers never execute a job without first claiming it in PostgreSQL.
 - Atomic DB claim prevents concurrent execution.
-- Lease + heartbeat detect crashed workers.
+- Fixed lease + reaper detect crashed workers.
 - Feeder restores Redis if dispatch data is lost.
 - Scheduled jobs are promoted only when due.
 - Failed jobs retry using exponential backoff.
@@ -141,7 +141,7 @@ Complete / Retry / Failed
 - Workers never modify scheduling state directly.
 - Maintenance responsibilities are isolated from workers.
 - Job ownership is controlled exclusively through PostgreSQL.
-- Failed workers are detected using leases and heartbeats.
+- Failed workers are detected using leases and the reaper.
 - Retry scheduling happens only in PostgreSQL.
 - Redis queues can always be reconstructed from database state.
 
@@ -262,7 +262,7 @@ curl -s -X POST http://localhost:8000/jobs \
 
 Expect `status: "scheduled"`. Maintenance promotes it to `pending` when due (~1s latency).
 
-### Health (queue stats + live workers)
+### Health (queue stats)
 
 ```bash
 curl -s http://localhost:8000/health | jq
@@ -328,14 +328,13 @@ This project intentionally keeps several production concerns out of scope:
 
 # Possible Future Improvements
 
+- Worker heartbeats that renew `leased_until` while a job is running (and expose live worker status on `/health`)
 - Kubernetes deployment
 - Leader election for maintenance
 - Prometheus metrics
-- OpenTelemetry tracing
 - S3 report storage
 - Authentication
 - Web dashboard
-- Multi-tenant support
 
 ---
 

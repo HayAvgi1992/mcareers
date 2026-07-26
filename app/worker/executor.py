@@ -15,6 +15,7 @@ from app.logging_config import get_logger
 from app.queue.client import QueueClient
 from app.services.job_log import append_job_log
 from app.worker.claim import claim_job
+from app.worker.heartbeat import LeaseHolder
 from app.worker.lifecycle import wait_or_stop
 from app.worker.retry import apply_failure
 
@@ -50,7 +51,11 @@ async def _report_progress(session, job: Job, pct: int) -> None:
     await session.commit()
 
 
-async def process_one(queue: QueueClient, worker_id: str) -> bool:
+async def process_one(
+    queue: QueueClient,
+    worker_id: str,
+    lease_holder: LeaseHolder | None = None,
+) -> bool:
     """
     Process a single job from the queue.
     Returns True if a Redis entry was consumed (even if claim skipped);
@@ -71,90 +76,97 @@ async def process_one(queue: QueueClient, worker_id: str) -> bool:
             logger.debug("job_claim_skipped", job_id=str(job_id))
             return True
 
-        await append_job_log(
-            session,
-            job.id,
-            "job started",
-            metadata={
-                "status": job.status.value,
-                "worker_id": worker_id,
-                "attempt_count": job.attempt_count,
-            },
-        )
-        await session.commit()
-
-        logger.info(
-            "job_claimed",
-            job_id=str(job.id),
-            job_type=job.job_type.value,
-            status=job.status.value,
-        )
-        logger.info(
-            "job_started",
-            job_id=str(job.id),
-            job_type=job.job_type.value,
-            status=job.status.value,
-        )
+        if lease_holder is not None:
+            lease_holder.job_id = job.id
 
         try:
-            handler = get_handler(job.job_type)
-            if job.job_type == JobType.batch:
-                run = handler.run(
-                    job,
-                    report=lambda pct: _report_progress(session, job, pct),
-                )
-            else:
-                run = handler.run(job)
-            result = await asyncio.wait_for(
-                run,
-                timeout=settings.job_timeout_seconds,
+            await append_job_log(
+                session,
+                job.id,
+                "job started",
+                metadata={
+                    "status": job.status.value,
+                    "worker_id": worker_id,
+                    "attempt_count": job.attempt_count,
+                },
             )
-            await _complete_job(session, job, result)
+            await session.commit()
+
             logger.info(
-                "job_completed",
-                job_id=str(job.id),
-                job_type=job.job_type.value,
-                status=JobStatus.completed.value,
-            )
-        except TimeoutError:
-            err = f"timed out after {settings.job_timeout_seconds:g}s"
-            logger.warning(
-                "job_timed_out",
+                "job_claimed",
                 job_id=str(job.id),
                 job_type=job.job_type.value,
                 status=job.status.value,
-                timeout_seconds=settings.job_timeout_seconds,
-                error_message=err,
             )
-            await apply_failure(session, job, err, queue=queue)
-        except UnknownJobTypeError as exc:
-            # Unknown type will not succeed on retry — fail permanently.
-            await apply_failure(
-                session,
-                job,
-                _safe_error_message(exc),
-                queue=queue,
-                permanent=True,
+            logger.info(
+                "job_started",
+                job_id=str(job.id),
+                job_type=job.job_type.value,
+                status=job.status.value,
             )
-        except (HandlerError, Exception) as exc:
-            err = _safe_error_message(exc)
-            if isinstance(exc, HandlerError):
+
+            try:
+                handler = get_handler(job.job_type)
+                if job.job_type == JobType.batch:
+                    run = handler.run(
+                        job,
+                        report=lambda pct: _report_progress(session, job, pct),
+                    )
+                else:
+                    run = handler.run(job)
+                result = await asyncio.wait_for(
+                    run,
+                    timeout=settings.job_timeout_seconds,
+                )
+                await _complete_job(session, job, result)
+                logger.info(
+                    "job_completed",
+                    job_id=str(job.id),
+                    job_type=job.job_type.value,
+                    status=JobStatus.completed.value,
+                )
+            except TimeoutError:
+                err = f"timed out after {settings.job_timeout_seconds:g}s"
                 logger.warning(
-                    "job_handler_error",
+                    "job_timed_out",
                     job_id=str(job.id),
                     job_type=job.job_type.value,
                     status=job.status.value,
+                    timeout_seconds=settings.job_timeout_seconds,
                     error_message=err,
                 )
-            else:
-                logger.exception(
-                    "job_handler_error",
-                    job_id=str(job.id),
-                    job_type=job.job_type.value,
-                    status=job.status.value,
-                    error_message=err,
+                await apply_failure(session, job, err, queue=queue)
+            except UnknownJobTypeError as exc:
+                # Unknown type will not succeed on retry — fail permanently.
+                await apply_failure(
+                    session,
+                    job,
+                    _safe_error_message(exc),
+                    queue=queue,
+                    permanent=True,
                 )
-            await apply_failure(session, job, err, queue=queue)
+            except (HandlerError, Exception) as exc:
+                err = _safe_error_message(exc)
+                if isinstance(exc, HandlerError):
+                    logger.warning(
+                        "job_handler_error",
+                        job_id=str(job.id),
+                        job_type=job.job_type.value,
+                        status=job.status.value,
+                        error_message=err,
+                    )
+                else:
+                    logger.exception(
+                        "job_handler_error",
+                        job_id=str(job.id),
+                        job_type=job.job_type.value,
+                        status=job.status.value,
+                        error_message=err,
+                    )
+                await apply_failure(session, job, err, queue=queue)
+        finally:
+            if lease_holder is not None and lease_holder.job_id == job.id:
+                lease_holder.job_id = None
 
     return True
 
@@ -163,13 +175,14 @@ async def run_executor_loop(
     queue: QueueClient,
     worker_id: str,
     stop: asyncio.Event,
+    lease_holder: LeaseHolder,
 ) -> None:
     """Continuously drain the pending queue until shutdown."""
     logger.info("executor_started", worker_id=worker_id)
     while not stop.is_set():
-        processed = await process_one(queue, worker_id)
+        processed = await process_one(queue, worker_id, lease_holder)
 
         if not processed:
             await wait_or_stop(stop, settings.executor_poll_interval_seconds)
-            
+
     logger.info("executor_stopped", worker_id=worker_id)

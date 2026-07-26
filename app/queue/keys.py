@@ -13,6 +13,9 @@ JOBS_SCHEDULED = "jobs:scheduled"
 # Inspection LIST of permanently failed job IDs (newest first). Not for dispatch.
 JOBS_DEAD_LETTER = "jobs:dead_letter"
 
+# Live worker heartbeats. Member = worker_id, score = last_seen unix epoch.
+WORKERS_HEARTBEAT = "workers:heartbeat"
+
 # Cap Redis DLQ growth; Postgres status=failed remains source of truth.
 DEAD_LETTER_MAX_LEN = 1000
 
